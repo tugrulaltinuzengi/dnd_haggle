@@ -208,3 +208,5 @@ input[type=range]{flex:1;accent-color:var(--gold);height:40px}
 }
 
 .repbar .rl,.affbar .rl{min-width:88px}
+
+.mini{display:inline-block;width:26px;height:26px;margin-right:8px;vertical-align:middle;border:1px solid var(--edge2);border-radius:2px;background-size:cover;background-position:center}

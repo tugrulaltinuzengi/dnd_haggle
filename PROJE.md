@@ -11,21 +11,21 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 
 ## 1. Durum
 
-**Şu anki sürüm: 0.10.** Ayrıntı Bölüm 12.
+**Şu anki sürüm: 0.11.** Ayrıntı Bölüm 12.
 
-**Çalışan:** kural motoru, canlı sunucu (DM + oyuncular, SSE), 6 karakter, pazarlık (zar, Pazar barı, Hard Gamble, Sez), **Yakınlık sistemi** (satıcıyla uzun vadeli ilişki, ayrı bar), teklifler (CRM hattı) ve Haftalık Pazar, alışveriş defteri (filtre + CSV), karanlık tema, **masaüstü düzeni** (PC + mobil), **Tailscale erişim aracı**, PIN hız sınırı, yedek ve başlatma betikleri, Android WebView kabuğu. 33 birim/API/araç testi ve 4 senaryolu tarayıcı testi geçiyor. Kod: [app/](app/), [android/](android/).
+**Çalışan:** kural motoru, canlı sunucu (DM + oyuncular, SSE), 6 karakter, pazarlık (zar, **Pazar** barı, Hard Gamble, Sez), **Yakınlık** sistemi (ayrı uzun vadeli bar), teklifler (CRM hattı) ve Haftalık Pazar, alışveriş defteri (filtre + CSV), karanlık tema, masaüstü düzeni, Tailscale araçları, PIN hız sınırı, yedek ve başlatma betikleri, Android WebView kabuğu ve **medya katmanı** (eşya görseli, satıcı portresi). 40 birim/API/araç testi ve 5 senaryolu tarayıcı testi geçiyor. Kod: [app/](app/), [android/](android/).
 
-**Bu turda (0.10):** iki ayrı bar (anlık **Pazar** + uzun vadeli **Yakınlık**), yakınlığa bağlı DC indirimi, başlangıç sabır bonusu ve **kilitli eşyalar**; `npm run tailscale`; PC düzeni ve klavye; DM davet adresi kartı; defter süzgeci ve CSV.
+**Bu turda (0.11):** medya katmanı (V2), ESP32 kararının planı, uyumluluk vektörleri, APK'da yalnızca `*.ts.net` için HTTP izni.
+
+**Önemli karar (K20):** sunucu **DM'in PC'sinde çalışmayacak**, hep-açık bir cihazda olacak ve DM bunun **ESP32 + Tailscale** olmasını istiyor. Tailscale'in ESP32'de çalışması mümkün (MicroLink, doğrulandı), ama pazar sunucusu Node.js olduğu için ESP'ye **yeniden yazılması** gerekir. Bu yüzden önce iki ucuz **kanıt çalışması** (spike) yapılır (Bölüm 7). Node sunucusu referans ve yedek yol olarak kalır.
 
 **Yol haritası (hedef sürümler):**
-- **v1.0:** medya katmanı (V2), satıcı ve oyuncu eşya üretimi (V3), oyuncu tezgâhı (V3b). *(Erişim, masaüstü düzeni ve defter genişletme 0.10'da yapıldı.)*
+- **v1.0:** ESP32 kanıt çalışması (V-ESP0), satıcı ve oyuncu eşya üretimi (V3, V3b), sorgu modu (V-POLL), ESP32 portu (V-ESP1, karar sonrası).
 - **v1.1:** konuşan portreler.
 - **v1.2:** eşya kütüphanesi (5e.tools verisi) ve görsel otomasyonu.
 - **v2.0:** Crooked Moon, APK v2.
 - **v2.1:** ekonomi ve endeksler (isteğe bağlı modül).
 - **Ertelendi:** dış oyuncu uygulaması entegrasyonu, bildirimler, QR kodu.
-
-**Sıradaki:** V2 medya katmanı (yükleme, kare kırpma, yerel disk), sonra V3.
 
 **Bilinen davranış (DM kabul etti):** başarısızlık fiyatı u arttıkça düşer (95/90/85 gp, X=100 Y=60); açgözlü satıcı ortalamada nötrden ucuz satabilir. Masa testinde izlenecek.
 
@@ -39,11 +39,11 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 | — | Y < X/4 zarsız ret, Rep −1. Önceki tekliften düşük Y Rep −1. Aynı ya da yüksek Y serbest | ✅ |
 | — | Rep 0: 1,1×X, satıcı o gün o oyuncuyla hiçbir alışverişte pazarlık yapmaz | ✅ |
 | — | Hard Gamble her an (büyülüde yasak), f = 0,5×X, eşya kusurlu ve satılamaz | ✅ |
-| K1 | Sunucu DM'in makinesinde ya da hep-açık küçük bir cihazda. Erişim **Tailscale** (PC ve mobil), `tailscale serve` ile HTTPS. Herkese açık Funnel isteğe bağlı, varsayılan kapalı. Cloudflare Tunnel ve Render gereksiz | ✅ |
+| K1 | Sunucu **hep-açık bir cihazda**, DM'in PC'sinde değil (DM kararı). Hedef cihaz **ESP32 + MicroLink (Tailscale)**, spike'larla kanıtlanacak. Node sunucusu referans olarak kalır, Raspberry Pi/PC'de de çalışır. Erişim Tailscale, PC ve mobil. Pi/PC'de `tailscale serve` ile HTTPS | ✅ (ESP ⏳ kanıt) |
 | K2 | Depolama yerel disk: `app/media/`, `app/data/`. Bulut gerekmez | ✅ |
 | K3–K4 | Portre ve eşya stili gerçekçi fantazi | ✅ |
 | K5 | Eşya PNG 512 + 128 küçük resim (saydam). Portre PNG sprite (5 kare) | ✅ |
-| K6 | Tailscale HTTPS (`tailscale serve`) verdiği için APK `https://` ile çalışır. LAN `http://` için cleartext izni ayrı seçenek | ✅ |
+| K6 | APK `https://` ister, **yalnızca `*.ts.net` adreslerine** şifresiz HTTP'ye izin verir (ESP32 HTTPS sunamadığı için, ağ güvenlik yapılandırması). Diğer adresler https zorunlu | ✅ |
 | K7 | Kaynak dosyalar (Crooked Moon paketi, 5e.tools kopyası) nerede | ⬜ DM |
 | K8 | Satıcı kendi eşyasını üretir, kendi görselini yükler. `owner` = satıcı ya da oyuncu | ✅ |
 | K9 | RTX 2060 **6 GB**, ComfyUI/Automatic1111 **kurulu değil** (kurulum V7'nin ilk adımı). SD 1.5 ile başla, SDXL 6 GB'ta yavaş. Yardımcı: Openverse/Wikimedia, DM'in kendi görselleri | ✅ |
@@ -55,7 +55,9 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 | K15 | Ekonomi (Bölüm 6) **isteğe bağlı modül**: DM açar/kapatır, varsayılan kapalı, alt özellikler tek tek. DM **"evet"** dedi: modül açıldığında önerilen varsayılanlar (5e yaşam tarzı giderleri, endekslerin oyunculara açık olması, silah/zırh aşınması) devrede olur. Parametreler modül açılırken ayarlanır | ✅ |
 | K16 | **İki ayrı bar.** Pazarlıkta **Pazar** barı (anlık sabır, oran olarak gösterilir) ve satıcı başına uzun vadeli **Yakınlık** barı. DC ve satıcı tipi gizli kalır | ✅ |
 | K17 | Uygulama **hem PC hem mobilden** kullanılır: telefonda APK/tarayıcı, PC'de tarayıcı (masaüstü düzeni V1b) | ✅ |
-| K18 | Sunucu donanımı: DM'in PC'si ya da hep-açık Raspberry Pi sınıfı cihaz. **ESP32 sunucu olamaz** (Bölüm 7) | ✅ (cihaz seçimi ⬜) |
+| K18 | Sunucu donanımı: **ESP32-S3 (PSRAM ≥ 8 MB, flash ≥ 16 MB, microSD)** DM'in tercihi, model ⬜. Yedek yol Raspberry Pi Zero 2 W (Node değişmeden) | ✅ (model ⬜) |
+| K20 | **ESP32 hedefi:** önce kanıt (Spike 1: tailnet içinden TCP/HTTP, Spike 2: bellek, LittleFS, SD), sonra C++ port; uyumluluk vektörleri ve aynı HTTP testleriyle doğrulanır. Kanıt başarısızsa Raspberry Pi'ye dönülür | ⏳ |
+| K21 | Medya: tarayıcıda kırp + yeniden boyutlandır + yeniden kodla (canvas), sunucu sihirli baytla doğrular (yalnız PNG/JPEG), sınırlar: eşya 700 KB, küçük resim 60 KB, portre 400 KB, 32–2048 px. Sunucu görüntü işlemez (ESP'ye taşınabilir) | ✅ |
 | K19 | **Yakınlık** (Bölüm 3): oyuncu × satıcı, 0–100, 5 seviye, kazanç/kayıp ve haftalık tavan, DC indirimi, başlangıç sabır bonusu, kilitli eşya. Değerler başlangıç önerisi, masa testinde ayarlanır | ✅ (değerler ⬜) |
 
 **İçerik ve lisans:** ticari değil, kendi masamız. **The Crooked Moon lisanslı** (sahibiz), DM'in kendi kopyasından içe aktarılır. 5e.tools verisi DM'in yerel kopyasından okunur, site taranmaz. **Google Görseller kazınmaz** (Google'ın şartlarına aykırı, kırılgan, sonuçlar tutarsız). Google'ın resmî görsel arama API'si 2025'ten beri yeni müşterilere kapalı, 1 Ocak 2027'de kapanıyor ([Google](https://developers.google.com/custom-search/v1/overview)). WotC 2024'te 5etools deposuna DMCA talebi gönderdi ([haber](https://tildes.net/~games.tabletop/1i39/5etools_repository_taken_down_after_dmca_request_by_wizards_of_the_coast)). **Depo herkese açık: telifli görsel, kitap metni ve 5e.tools verisi depoya girmez** (`app/media/`, `app/data/` `.gitignore`'da; `git ls-files` denetimi testte olacak). Hukuki tavsiye değildir.
@@ -131,8 +133,9 @@ Ozan (İkna +6, Blöf +3, Gözdağı 0, 80 gp) · Hırsız (+2/+6/+2, 60 gp) · 
 ```bash
 cd app
 DM_PIN=1234 node server.js        # http://localhost:3000, bağımlılık yok (Node 18+); ya da ./start.sh, start.bat
-npm test                          # 33 birim/API/araç testi
-npm run e2e                       # tarayıcı testi: 4 senaryo (playwright gerekir)
+npm test                          # 40 birim/API/araç testi (vektör testi dahil)
+npm run e2e                       # tarayıcı testi: 5 senaryo (playwright gerekir)
+npm run vectors                   # kural motoru uyumluluk vektörlerini yeniden üretir (conformance/)
 npm run tailscale                 # Tailscale HTTPS yayını (Bölüm 7). --funnel: herkese açık, --stop: kapat
 npm run backup                    # data/ ve media/ -> backups/pazar-TARIH.tgz
 ```
@@ -147,6 +150,9 @@ Sunucu her zarı atar (oyuncu sayı görmez). Durum `app/data.json`'da tutulur. 
 ### Teklifler (CRM) ve Haftalık Pazar
 Aşamalar: Yeni (DM bekleniyor) → Karşı teklif (cevap oyuncuda) → Anlaşıldı (Pazar gününde teslim) → Teslim edildi. Kapananlar: Reddedildi, Geri çekildi, Teslim olmadı. Oyuncu teklif bırakır (katalog ya da özel istek), DM kabul / karşı teklif (kural önerisiyle: Y + a·u/2) / reddet, ya da oyuncuya teklif gönderir. Teklifte zar yok. Katalog eşyasında teklif etiketin altında ve en az %25'i, oyuncunun en çok 10 açık teklifi olur.
 **Haftalık Pazar** (DM): anlaşılanları teslim eder (altın düşer, eşya çantaya girer, stok azalır; altın yetmezse ya da eşya tükenmişse "Teslim olmadı"), hafta ve gün ilerler, pazarlıklar ve yasaklar sıfırlanır, cevap bekleyen teklifler kalır.
+
+### Medya (yapıldı, 0.11)
+DM Pazar sekmesinde eşyaya **Görsel**, satıcıya **Portre** ekler (telefonda kamera/galeri). **Tarayıcı** görseli ortadan kırpar, yeniden boyutlandırır ve yeniden kodlar (EXIF gider): eşya 512×512 PNG (700 KB'ı aşarsa 384, sonra 256) + 128×128 küçük resim, portre 768×512 JPEG. Sunucu görüntü işlemez, yalnızca **sihirli baytlarla doğrular** (PNG/JPEG, SVG ve diğerleri reddedilir), boyut ve piksel sınırını uygular, dosya adını kendisi üretir ve `?v=` ile önbellek tazeler. `POST /api/media?kind=item|portrait&id=…&variant=main|thumb` (yalnız DM), `GET /media/…` (yol atlatma engelli, `nosniff`, değişmez önbellek), `dm/mediaclear`, eşya/satıcı silinince dosyalar da silinir. Dosyalar `app/media/` altında (`MEDIA_DIR`), depoya girmez. Oyuncu ekranında raf ve pazarlıkta büyük görsel, çantada küçük resim, yoksa yazı kutusu. **Şu an yalnızca DM yükler**, oyuncu tezgâhı gelince (V3b) kendi eşyası için de açılır.
 
 ### Alışveriş defteri (yapıldı)
 Her altın hareketi kaydedilir: `{ t, hafta, gün, tür (alım, hard gamble, teklif teslimi, DM), oyuncu, satıcı, eşya, tutar (− harcama, + gelir), etiket }`. Oyuncu kendi kayıtlarını, DM hepsini ve toplamları görür. DM'in altın ayarları da deftere yazılır (ekonomideki "kaynak" tarafı). Ekonomi motorunun (Bölüm 6) veri kaynağı budur.
@@ -313,9 +319,48 @@ Ayrı, yerel (Electron) bir D&D oyuncu uygulaması var. **Şimdilik geçildi** (
 | Raspberry Pi 3/4/5, Zero 2 W (64-bit) | **Evet, hep-açık için öneri** | Node 18+ ve Tailscale çalışır, düşük güç. Medya ve durum için iyi bir kart ya da SSD |
 | Mini PC, NAS, eski dizüstü | Evet | Docker ile de çalışır |
 | Eski Android telefon (Termux) | Denenebilir | Kararsız olabilir |
-| **ESP32 / ESP8266** | **Hayır (sunucu olarak)** | Node.js çalışmaz. ESP32'de yaklaşık 520 KB RAM var (PSRAM'li modellerde 2–8 MB), canlı bağlantılar (SSE), JSON durumu, MB'lık görseller ve Tailscale istemcisi sığmaz. Resmî Tailscale istemcisi yok, topluluk WireGuard kütüphaneleri var ama ana sunucu yerine geçmez (doğrulanmadı). C++/MicroPython'la yeniden yazmak ve medyayı SD karta koymak ayrı bir proje olur, bu oyun için uygun değil |
+| **ESP32-S3** (PSRAM'li) | **Mümkün ama yeniden yazım ister** (DM tercihi) | Node çalışmaz. Tailscale istemcisi var (MicroLink, doğrulandı). Ayrıntı ve kanıt planı aşağıda |
+| ESP32 (PSRAM'siz), ESP8266 | Hayır | RAM yetmez |
 
-**ESP'nin uygun yardımcı rolleri** (isteğe bağlı, çekirdek plan dışı): yeni teklif gelince ışık/LED, fiziksel "Yeni Gün" düğmesi, DM'in PC'sini Wake-on-LAN ile uyandırma (aynı ağdan). Bunlar sunucuyu değil küçük bir tetikleyiciyi çalıştırır.
+**ESP'nin yardımcı rolleri** (ana sunucu olmasa da): yeni teklif gelince ışık, fiziksel "Yeni Gün" düğmesi, PC'yi Wake-on-LAN ile uyandırma.
+
+### ESP32 üzerinde çalıştırma (K20, DM kararı)
+**Karar:** sunucu DM'in PC'sinde çalışmayacak. Hep-açık cihaz **ESP32** olacak, **Tailscale**'e bağlı olacak, DM ve tüm oyuncular pazara ESP üzerinden bağlanacak.
+
+**Doğrulanan bilgi (önceki "topluluk kütüphaneleri var, doğrulanmadı" notunun düzeltmesi):** ESP32 için Tailscale uyumlu bir istemci var: **MicroLink** (ts2021 protokolü, WireGuard, DERP, DISCO, STUN, yaklaşık 100 KB SRAM, ESP-IDF, Wi-Fi ve 4G) [github.com/CamM2325/microlink](https://github.com/CamM2325/microlink). README'si "çift yönlü **UDP**" diyor: ESP'nin tailnet içinden **TCP/HTTP** sunabildiği **doğrulanmadı**. Spike 1 bunu test eder.
+
+**Asıl iş:** Node.js ESP'de çalışmaz, pazar sunucusu **yeniden yazılmalı**:
+| Parça | Node'da (bugün) | ESP32'de |
+|---|---|---|
+| Tailscale | `tailscale` CLI, `serve` | MicroLink (ESP-IDF bileşeni) |
+| HTTP sunucu | `http` modülü | `esp_http_server` (HTTP, TLS yok) |
+| Canlı güncelleme | SSE | soket sınırı nedeniyle **kısa aralıklı sorgu**: `GET /api/state?rev=N`, değişmediyse 304 |
+| Durum | bellek + `data.json` | LittleFS'te JSON, yazımlar 5–10 sn'de bir birleştirilir, defter son ~300 kayıt |
+| PWA dosyaları | `public/` | LittleFS (gzip) |
+| Görseller | disk | **microSD** (FAT) |
+| Kural motoru | `engine.js` | C++ port, **uyumluluk vektörleriyle** doğrulanır (üretildi: `app/conformance/haggle-vectors.json`, 688 vaka) |
+| Görsel işleme | tarayıcıda (canvas) | aynı: ESP görüntü işlemez (V2 zaten böyle tasarlandı) |
+| Arama/filtre | istemci | istemci (ESP sadece sayfalı liste verir) |
+| Zaman | `Date` | SNTP (Wi-Fi üzerinden) |
+| Yedek | `npm run backup` | DM ekranından indirme, SD kart yedeği |
+| Güncelleme | `git pull` | OTA firmware |
+
+**Donanım şartı (öneri):** ESP32-S3 (çift çekirdek), **PSRAM ≥ 8 MB**, **flash ≥ 16 MB**, **microSD yuvası**. PSRAM'siz ESP32 ve ESP8266 uygun değil. Kartın tam modelini bilmiyorum.
+
+**Kabul edilmesi gereken sınırlar:**
+- **HTTPS yok** (`tailscale serve` ESP'de olmaz). Adres `http://<ad>.<tailnet>.ts.net:3000`, trafik WireGuard ile şifreli. Tarayıcıda "Ana ekrana ekle" ve service worker (güvenli bağlam ister) çalışmaz, **oyuncular APK kullanır** (APK bugün yalnızca `*.ts.net` için HTTP'ye izinli). Tarayıcı sayfası yine açılır.
+- Eşzamanlı bağlantı sınırlı: hedef **≤ 8 oyuncu + DM**, sorgu modu, izleyici (watchdog) ve otomatik yeniden bağlanma.
+- Flash aşınması ve SD bozulması: yazma seyreltme, atomik yazma (geçici dosya + yeniden adlandırma), düzenli yedek indirme.
+- İki sunucu (Node referans + ESP) uyumlu tutulmalı.
+
+**Plan (önce kanıtla):**
+1. **Spike 1 (S):** MicroLink ile ESP tailnet'e girer, telefon `ping` atar, ardından **TCP üzerinden basit bir HTTP sayfası** telefondan tarayıcı ve APK ile açılır. Boş bellek (heap/PSRAM) ölçülür. **Geçemezse ESP yolu kapanır.**
+2. **Spike 2 (S):** LittleFS'ten PWA dosyalarını sunar, 5 istemciyle sorgu yapılır, bellek ve tepki süresi ölçülür, SD'den 300 KB'lık görsel sunulur.
+3. **V-POLL (S):** Node sunucusuna da sorgu modu eklenir (`?rev=`), istemci SSE koparsa ya da ESP'de sorguya döner.
+4. **Port (XL):** kural motoru C++ (vektörlerle), tüm API, durum saklama, medya. `api.test.js` aynı HTTP testleri **ESP adresine karşı** çalışacak şekilde `TEST_BASE_URL` ile genişletilir (deterministik zar için test derlemesi).
+5. Node sunucusu referans ve test yolu olarak kalır.
+
+**Dürüst tavsiye:** Spike 1 geçse bile tam port büyük iş. Aynı işi gören **Raspberry Pi Zero 2 W** (benzer fiyat ve güç) Node kodunu **değiştirmeden** çalıştırır ve resmî Tailscale ile `tailscale serve` HTTPS/PWA verir. ESP yolu tamamen olanaklı, ama bedeli yeniden yazım ve HTTP/soket sınırları. Karar sizin: spike'lar ucuz, önce onları yapmayı öneririm. Başarısız ya da yorucu olursa Pi'ye dönüş kolay, çünkü Node sunucusu duruyor. Ben ESP-IDF taslak proje ve adım adım yönerge yazabilirim, **donanımı burada test edemem**: sonuçları siz paylaşırsınız.
 
 ### Masaüstü düzeni (V1b) — yapıldı (0.10)
 Uygulama PC'de de kullanılacak (K17). ≥ 900 px genişlikte Darkest Dungeon referansındaki gibi **iki bölme**: solda satıcı portresi, sabır çubuğu ve pazarlık paneli, sağda raf, çanta ve teklifler. DM paneli geniş: canlı pazarlıklar, teklifler ve defter yan yana. Mobil düzen aynı kalır (tek sütun, alt sekme). Klavye: Enter ile pazarlık, ok tuşlarıyla teklif. PWA olarak PC'ye kurulabilir (HTTPS ile). **Bitiş:** 360, 768, 1280 ve 1920 px'te düzen bozulmaz (tarayıcı testi 3–4 genişlikte), dokunma ve fare ile aynı işlevler.
@@ -332,7 +377,10 @@ Uygulama PC'de de kullanılacak (K17). ≥ 900 px genişlikte Darkest Dungeon re
 | v1.0 | **V0** Karar kilidi | Kalan sorular (Bölüm 10) | S | ⬜ |
 | 0.10 | **V1** Erişim: Tailscale | `npm run tailscale` (serve, adres), PIN hız sınırı, Funnel seçeneği, yedek, başlatma betikleri. QR ertelendi | M | ✅ |
 | 0.10 | **V1b** Masaüstü düzeni | iki bölmeli PC düzeni, DM geniş panel, klavye, 4 genişlikte test | M | ✅ |
-| v1.0 | **V2** Medya katmanı | `/api/media` (boyut, tür, yeniden kodlama, kare kırpma), yerel disk, önbellek | M | ⬜ |
+| 0.11 | **V2** Medya katmanı | tarayıcıda yeniden boyutlandırma, sunucuda sihirli bayt doğrulama, `/api/media`, `/media`, eşya görseli + küçük resim, satıcı portresi | M | ✅ |
+| v1.0 | **V-ESP0** ESP32 kanıt çalışması | Spike 1 (MicroLink + TCP/HTTP tailnet içinden, bellek) ve Spike 2 (LittleFS, 5 istemci, SD görseli) | S | ⬜ donanım |
+| v1.0 | **V-POLL** Sorgu modu | `GET /api/state?rev=N`, istemci yedek modu, Node'a da | S | ⬜ |
+| v1.0 | **V-ESP1** ESP32 portu | C++ motor + API + durum + medya, vektör ve HTTP testleri (`TEST_BASE_URL`) | XL | ⬜ kanıt sonrası |
 | 0.10 | **V2b** Defter genişletme | oyuncu/tür süzgeci, CSV dışa aktarma (tüm kayıtlar) | S | ✅ |
 | v1.0 | **V3** Satıcı eşya üretimi | editör, kendi görseli, varyant, `owner` | M | ⬜ |
 | v1.0 | **V3b** Oyuncu tezgâhı | rezerve, oyuncu teklif hattı, teslim, ücret (DM ayarı, 0 olabilir), denetim günlüğü, onay kuyruğu | L | ⬜ |
@@ -347,7 +395,7 @@ Uygulama PC'de de kullanılacak (K17). ≥ 900 px genişlikte Darkest Dungeon re
 | — | **V11** Bildirimler | cevap gelince bildirim | M | ⏸ ertelendi |
 | — | **V12** Dış uygulama entegrasyonu | `/api/v1`, webhook, `externalId`, gömülü mod (K12/K14) | L | ⏸ ertelendi |
 
-**Sıra:** V1–V1b ve V2b yapıldı. **Sıradaki V2 (medya katmanı)**, sonra V3 ve V3b. V3 ve V3b medyadan hemen sonra (kütüphane olmadan da işe yarar). Portre (V4–V5) ve kütüphane (V6–V8) bağımsız ilerler. Ekonomi (V13+) defterin genişlemesine dayanır, istenmezse hiç yapılmaz.
+**Sıra:** V1–V1b, V2 ve V2b yapıldı. Sıradaki **V-ESP0** (donanımla, sizin testinizle) ve paralelde Node referansında **V3/V3b**. V-ESP1 ancak kanıt başarılıysa. V3 ve V3b medyadan hemen sonra (kütüphane olmadan da işe yarar). Portre (V4–V5) ve kütüphane (V6–V8) bağımsız ilerler. Ekonomi (V13+) defterin genişlemesine dayanır, istenmezse hiç yapılmaz.
 
 **Genel testler:** birim (viseme, slug, eşleştirme, rarite fiyatı, medya, ekonomi formülleri), API (sınırlar, yetki, yeniden kodlama, defter tutarlılığı), tarayıcı Playwright (portre yükle → kare değişti; kütüphaneden seç → pazarda görsel; iki oyuncu arası satış; 4 genişlikte düzen). Bütçe: ilk yükleme < 500 KB (görsel hariç), portre sprite < 1 MB, eşya küçük resmi < 15 KB.
 
@@ -369,7 +417,12 @@ Uygulama PC'de de kullanılacak (K17). ≥ 900 px genişlikte Darkest Dungeon re
 | **Tailscale kurulum ve kullanıcı sınırı** | Bazı oyuncular bağlanamaz | Paylaşım (node sharing), Funnel (isteğe bağlı), kurulum rehberi, güncel plan sınırlarını doğrula |
 | **Funnel herkese açık** | Yetkisiz DM denemesi | Varsayılan kapalı, güçlü PIN, hız sınırı |
 | **DM'in cihazı kapalı** | Teklif bırakılamaz | Hep-açık Raspberry Pi sınıfı cihaz |
-| **ESP32'yi sunucu yapma isteği** | Zaman kaybı | Uygun değil (Bölüm 7), yardımcı rolde kullanılır |
+| **ESP32'de TCP/HTTP tailnet içinden çalışmayabilir** (MicroLink README'si UDP diyor) | ESP yolu kapanır | Spike 1 önce, yedek yol Raspberry Pi |
+| **ESP portu büyük iş; iki sunucu uyumsuzlaşır** | Zaman, tutarsızlık | Uyumluluk vektörleri, aynı HTTP testleri (`TEST_BASE_URL`), Node referans |
+| **ESP yalnız HTTP: PWA ve service worker yok** | Kurulum deneyimi | APK (`*.ts.net` için HTTP izni), tarayıcıda düz sayfa |
+| **ESP RAM/soket sınırı, SSE yok** | Gecikmeli güncelleme, bağlantı reddi | Sorgu modu, ≤ 8 oyuncu, watchdog |
+| **SD bozulması / flash aşınması** | Veri kaybı | Yazma seyreltme, atomik yazma, düzenli yedek indirme |
+| Yüklenen görsel sunucuda işlenmiyor | Kötü niyetli dosya | Sihirli bayt (yalnız PNG/JPEG), boyut ve piksel sınırı, yalnız DM yükler, tarayıcıda yeniden kodlama |
 | Pazar barı satıcı tipini sızdırır | Sez zayıflar | Oran gösterimi, kabul edilen ödün (K16) |
 | Yakınlık sömürülür (aynı şeyi tekrar tekrar alıp yükseltme) | Denge bozulur | Haftalık kazanç tavanı (+10), kayıplar sınırsız, DM ±ayar |
 | Yakınlık DC indirimi pazarlığı fazla kolaylaştırır | Zorluk düşer | En çok −3, oyuncuya gösterilmez, değerler masa testinde ayarlanır |
@@ -381,16 +434,15 @@ Uygulama PC'de de kullanılacak (K17). ≥ 900 px genişlikte Darkest Dungeon re
 
 ## 10. Açık sorular (DM)
 
-Cevaplananlar: ekran kartı ve ComfyUI (6 GB, kurulu değil), tezgâh kuralları (DM ayarı), dış uygulama (ertelendi), erişim (Tailscale, PC + mobil), Pazar/Yakınlık barları (iki ayrı), ekonomi (evet), kodlamaya başlama (evet).
+Cevaplananlar: ekran kartı ve ComfyUI (6 GB, kurulu değil), tezgâh kuralları (DM ayarı), dış uygulama (ertelendi), erişim (Tailscale, PC + mobil), iki ayrı bar (Pazar + Yakınlık, teyit edildi), ekonomi (evet), medya katmanı (evet), **sunucu PC'de değil, ESP32'de** (K20).
 
-1. **Yakınlık değerleri:** başlangıç 20, kazanç (alışveriş +2, teklif +5, anlaşma +1), kayıp (Hard Gamble −2, hakaret −1, sinirlenme −5), haftalık tavan +10, DC indirimi en çok −3 ve Dost'ta +1 sabır uygun mu? Kilitli eşya kullanacak mısınız?
-2. **Tailscale:** kaç oyuncu bağlanacak, hepsi Tailscale kurabilir mi? Kuramayacak biri için Funnel (herkese açık, ≥ 8 karakter PIN) istenir mi? Gerçek denemede `npm run tailscale` çıktısını paylaşırsanız sorunları birlikte gideririz.
-3. **Sunucu cihazı:** DM'in PC'si mi, hep-açık küçük bir cihaz (Raspberry Pi vb.) mi? Elinizde var mı?
-4. **5e.tools:** yerelde `items.json` gibi bir kopya var mı, yoksa siteden kendiniz indirip klasöre koyabilir misiniz?
-5. **Crooked Moon:** Foundry'de kurulu paket mi, PDF/D&D Beyond mi?
-6. **Portreler:** hazır gerçekçi fantazi portreler var mı, kendiniz mi üreteceksiniz? Ağız kapalı, önden bakan çekim lazım.
-7. **QR kodu:** davet adresi için QR istenir mi? (Şimdilik kopyala/paylaş var.)
-8. **Sıradaki adım:** V2 (medya katmanı: yükleme, kare kırpma, yerel disk) ile devam edeyim mi?
+1. **ESP kartı tam olarak hangisi?** Model, PSRAM (MB), flash (MB), microSD yuvası var mı? ESP32-S3 (PSRAM ≥ 8 MB, flash ≥ 16 MB, microSD) önerilir, PSRAM'siz ESP32 ve ESP8266 uygun değil.
+2. **Spike 1'i yapmak ister misiniz?** Ben ESP-IDF taslak projesi ve adım adım yönerge yazarım (MicroLink ile tailnet'e girmek, telefondan `http://…ts.net` sayfasını açmak, boş belleği ölçmek). Donanımı burada test edemem, sonucu siz paylaşırsınız. Geçemezse ESP yolu kapanır.
+3. **Yedek yol:** Spike başarısız olursa ya da tam port yorucu bulunursa Raspberry Pi Zero 2 W'ye (Node kodu değişmeden, resmî Tailscale, HTTPS) dönmeye razı mısınız?
+4. **Oyuncu sayısı:** ESP için hedef ≤ 8 oyuncu + DM yeterli mi?
+5. **Yakınlık değerleri** hâlâ onay bekliyor: başlangıç 20, kazanç/kayıp, haftalık tavan +10, DC indirimi en çok −3, Dost'ta +1 sabır. Kilitli eşya kullanacak mısınız?
+6. **5e.tools** yerel kopyası, **Crooked Moon** kaynağı (Foundry paketi mi PDF mi), hazır **portreler**, **QR kodu** isteği.
+7. **Sıradaki adım hangisi?** (a) Spike 1 yönergesi ve firmware taslağı, (b) V3 satıcı eşya editörü (Node referansında), (c) V-POLL sorgu modu.
 
 ---
 
@@ -434,7 +486,11 @@ Gözlem soruları: açgözlü satıcı nötrden zor hissettirdi mi? Oyuncular ba
 
 Kural: her commit'te ilgili girdi eklenir. Numara: **0.x** geliştirme sürümleri, **v1.0** ilk kararlı hedef. Saatler UTC, tarih 29 Eylül 2026. **En yeni en üstte.**
 
-### 0.10 · yakınlık, Tailscale erişimi, masaüstü düzeni (bu commit)
+### 0.11 · medya katmanı ve ESP32 planı (bu commit)
+- **Kod:** **V2 medya katmanı:** DM eşya görseli (512 PNG + 128 küçük resim) ve satıcı portresi (768×512 JPEG) yükler, tarayıcıda kırpma ve yeniden kodlama, sunucuda sihirli bayt doğrulaması (yalnız PNG/JPEG, SVG reddedilir), boyut ve piksel sınırı, `/media` sunumu (yol atlatma engelli, `nosniff`), temizleme ve silmede dosya temizliği, oyuncu ekranında görsel/yazı kutusu. **Uyumluluk vektörleri** (`npm run vectors`, 688 vaka, `conformance/haggle-vectors.json`) olası bir ESP32 C++ portunu doğrulamak için. APK: yalnızca `*.ts.net` için HTTP izni (ağ güvenlik yapılandırması). Testler: 40 birim/API/araç + 5 senaryolu tarayıcı testi (görsel yükleme, doğru boyut, kaldırma dahil).
+- **Plan:** DM kararı: **sunucu PC'de değil, ESP32 üzerinde** (K20) ve iki ayrı bar teyit edildi. **Düzeltme:** önceki sürümlerde "ESP32'de Tailscale istemcisi doğrulanmadı" yazılmıştı, MicroLink (Tailscale uyumlu ESP32 istemcisi) doğrulandı, ama TCP/HTTP desteği doğrulanmadı. ESP yolu **kanıt çalışmasıyla** başlar (V-ESP0), Node sunucusu referans ve yedek kalır, Raspberry Pi alternatifi açık tutulur. Yeni aşamalar: V-ESP0, V-POLL, V-ESP1. Görsel yükleme kararı: sunucu görüntü işlemez (ESP'ye taşınabilir).
+
+### 0.10 · yakınlık, Tailscale erişimi, masaüstü düzeni (797b3b3)
 - **Kod:** **Yakınlık sistemi**: oyuncu × satıcı 0–100, 5 seviye, kazanç/kayıp ve haftalık tavan, DC indirimi (kritik eşiğiyle birlikte), Dost'ta +1 başlangıç sabrı, **kilitli eşya** (ad ve fiyat sızmaz, işlem reddedilir), DM ±ayar ve eşya başına gereken yakınlık. **İki ayrı bar** pazarlıkta yapışkan (Pazar + Yakınlık), satıcı listesinde ve portrede yakınlık. **`npm run tailscale`** (serve, adres, `--funnel`, `--stop`), **`npm run backup`**, `start.sh`/`start.bat`, **PIN hız sınırı** (5 yanlışta 10 dk; sayaç hatası testle yakalanıp düzeltildi), DM **davet adresi** kartı (kopyala/paylaş). **Masaüstü düzeni** (≥ 900 px iki bölme, klavye). Defter: oyuncu/tür süzgeci ve **CSV** (`/api/ledger.csv`). Varsayılan veri yolu `app/data/data.json`. Testler: 33 birim/API/araç (sahte `tailscale` komutu dahil) + 4 senaryolu tarayıcı testi (4 genişlikte taşma yok, iki sütun, iki bar, klavye).
 - **Plan:** cevaplar işlendi: iki ayrı bar (anlık Pazar + uzun vadeli Yakınlık), ekonomi için önerilen varsayılanlar onaylandı (K15), kodlamaya başlama onayı. V1, V1b, V2b tamamlandı, **V2 sıradaki**. QR kodu ertelendi. Gerçek Tailscale'de denenmedi.
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Yalnızca Tailscale adreslerine (*.ts.net) şifresiz HTTP'ye izin verilir: ESP32 gibi HTTPS sunamayan cihazlar için.
+     Trafik zaten Tailscale (WireGuard) tüneli içinde şifrelidir. Diğer tüm adresler https:// olmak zorundadır. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">ts.net</domain>
+    </domain-config>
+</network-security-config>

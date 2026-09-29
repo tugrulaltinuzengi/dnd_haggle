@@ -8,7 +8,8 @@
     "test": "node --test test/*.test.js",
     "e2e": "node test/e2e.js",
     "tailscale": "node tools/tailscale.js",
-    "backup": "node tools/backup.js"
+    "backup": "node tools/backup.js",
+    "vectors": "node tools/gen-vectors.js"
   },
   "engines": {
     "node": ">=18"

@@ -7,6 +7,19 @@ const SP = process.env.SHOTS || os.tmpdir();
 const SERVER = path.join(__dirname, '..', 'server.js');
 const shot = (p, n) => p.screenshot({ path: `${SP}/${n}.png` });
 
+
+// Geçerli küçük bir PNG üretir (dosya seçiciye verilecek kaynak görsel).
+function makePng(w, h) {
+  const zlib = require('zlib');
+  const table = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (buf) => { let c = 0xffffffff; for (const x of buf) c = table[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const t = Buffer.from(type), l = Buffer.alloc(4), r = Buffer.alloc(4); l.writeUInt32BE(data.length); r.writeUInt32BE(crc(Buffer.concat([t, data]))); return Buffer.concat([l, t, data, r]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) { raw[y * (w * 3 + 1)] = 0; for (let x = 0; x < w; x++) { const o = y * (w * 3 + 1) + 1 + x * 3; raw[o] = (x * 255 / w) | 0; raw[o + 1] = (y * 255 / h) | 0; raw[o + 2] = 90; } }
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
 async function withServer(port, dice, fn) {
   const fs = require('fs'); const df = `${SP}/data-${port}.json`; try { fs.unlinkSync(df); } catch {}
   const s = spawn('node', [SERVER], { env: { ...process.env, PORT: port, DM_PIN: '4321', DATA_FILE: df, DICE_FIXED: dice }, stdio: 'pipe' });
@@ -151,6 +164,48 @@ async function withServer(port, dice, fn) {
     await d.click('[data-dtab=ledger]');
     await d.selectOption('#lf-k', 'buy');
     await dc.close();
+  });
+
+  // 5) Görsel yükleme: DM eşya ve portre yükler, oyuncu görür, dosya doğru boyutta sunulur
+  await withServer(3115, '20', async (url) => {
+    const dc = await b.newContext({ viewport: { width: 1280, height: 900 } });
+    const pc = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+    const d = await dc.newPage(), p = await pc.newPage();
+    const errs = []; for (const pg of [d, p]) pg.on('pageerror', (e) => errs.push(e.message));
+    d.on('dialog', (x) => x.accept(x.defaultValue())); p.on('dialog', (x) => x.accept(x.defaultValue()));
+    await d.goto(url); await d.click('#dm'); await d.fill('#pin', '4321'); await d.click('#dmgo');
+    await p.goto(url); await p.click('[data-pick=ozan]'); await p.fill('#name', 'Gorsel'); await p.click('#go');
+    await p.waitForSelector('[data-mid=m2]');
+    await d.click('[data-dtab=market]');
+    const [fc] = await Promise.all([d.waitForEvent('filechooser'), d.locator('.row:has-text("Uzun Kılıç") [data-img]').click()]);
+    await fc.setFiles({ name: 'kilic.png', mimeType: 'image/png', buffer: makePng(300, 200) });
+    await d.waitForSelector('.row:has-text("Uzun Kılıç") .mini');
+    const [fc2] = await Promise.all([d.waitForEvent('filechooser'), d.locator('[data-img="portrait|m2"]').click()]);
+    await fc2.setFiles({ name: 'marla.png', mimeType: 'image/png', buffer: makePng(400, 300) });
+    await d.waitForSelector('[data-imgdel="portrait|m2"]');
+    // oyuncu: portre ve eşya görseli görünür, ad yazısı yerine görsel var
+    await p.click('[data-mid=m2]');
+    await p.waitForSelector('.portrait[style*="background-image"]');
+    await p.waitForSelector('.shelf .art[style*="background-image"]');
+    assert.equal(await p.locator('.shelf .art[style*="background-image"] .artname').count(), 0);
+    const size = (sel) => p.evaluate(async (q) => {
+      const el = document.querySelector(q); const u = getComputedStyle(el).backgroundImage.slice(5, -2);
+      return new Promise((r) => { const i = new Image(); i.onload = () => r([i.naturalWidth, i.naturalHeight]); i.onerror = () => r(null); i.src = u; });
+    }, sel);
+    assert.deepEqual(await size('.shelf .art[style*="background-image"]'), [512, 512]); // kaynak 300x200, sunucuda 512 kare
+    assert.deepEqual(await size('.portrait[style*="background-image"]'), [768, 512]);
+    // satın al: çantada küçük resim (128) görünür
+    await p.locator('.shelfitem').first().click();
+    await p.click('[data-act=accept]');
+    await p.click('[data-tab=bag]'); await p.waitForSelector('.bslot .art[style*="background-image"]');
+    assert.deepEqual(await size('.bslot .art[style*="background-image"]'), [128, 128]);
+    // kaldır
+    await d.locator('.row:has-text("Uzun Kılıç") [data-imgdel]').click();
+    await d.waitForSelector('.row:has-text("Uzun Kılıç") [data-img]:not([data-imgdel]) >> nth=0');
+    await p.click('[data-tab=market]'); await p.click('[data-mid=m2]');
+    await p.waitForSelector('.shelf .artname');
+    assert.deepEqual(errs, []);
+    await dc.close(); await pc.close();
   });
   await b.close();
   console.log('E2E OK');

@@ -14,6 +14,9 @@ if (process.env.NODE_ENV === 'production' && !process.env.DM_PIN) {
 const DM_PIN = process.env.DM_PIN || '1234';
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'data.json');
 const DATA_DIR = path.dirname(DATA_FILE);
+const MEDIA_DIR = path.resolve(process.env.MEDIA_DIR || path.join(__dirname, 'media'));
+// Medya sınırları (küçük tutulur: hem telefon hem küçük cihazlar için). Görseller istemcide yeniden boyutlandırılır.
+const MEDIA_LIMITS = { item: 700 * 1024, thumb: 60 * 1024, portrait: 400 * 1024, minPx: 32, maxPx: 2048 };
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const PUBLIC = path.join(__dirname, 'public');
 const CHARS = JSON.parse(fs.readFileSync(path.join(PUBLIC, 'chars.json'), 'utf8'));
@@ -32,6 +35,43 @@ function clientIp(req) {
 
 class HttpError extends Error { constructor(msg, code = 400) { super(msg); this.code = code; } }
 const fail = (msg, code) => { throw new HttpError(msg, code); };
+
+// ---------- medya ----------
+// Dosya türü uzantıdan değil sihirli baytlardan anlaşılır. Yalnızca PNG ve JPEG kabul edilir.
+function sniffImage(buf) {
+  if (buf.length >= 24 && buf.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) && buf.toString('latin1', 12, 16) === 'IHDR') {
+    return { ext: 'png', mime: 'image/png', w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  }
+  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const m = buf[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { ext: 'jpg', mime: 'image/jpeg', h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+      if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue; }
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
+  return null;
+}
+const MEDIA_MIME = { png: 'image/png', jpg: 'image/jpeg' };
+function mediaFileOf(rel) { // '/media/items/abc.png?v=1' -> güvenli mutlak yol ya da null
+  const clean = String(rel || '').split('?')[0];
+  if (!clean.startsWith('/media/')) return null;
+  const abs = path.resolve(MEDIA_DIR, clean.slice('/media/'.length));
+  return abs.startsWith(MEDIA_DIR + path.sep) && MEDIA_MIME[path.extname(abs).slice(1)] ? abs : null;
+}
+function unlinkMedia(rel) { const f = mediaFileOf(rel); if (f) { try { fs.unlinkSync(f); } catch {} } }
+function readRaw(req, max) {
+  return new Promise((resolve, reject) => {
+    const cl = +req.headers['content-length'];
+    if (Number.isFinite(cl) && cl > max) { req.resume(); return reject(new HttpError('Dosya çok büyük', 413)); }
+    const chunks = []; let n = 0;
+    req.on('data', (c) => { n += c.length; if (n > max) { req.destroy(); reject(new HttpError('Dosya çok büyük', 413)); } else chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
 
 // ---------- durum ----------
 function seed() {
@@ -165,15 +205,16 @@ function playerView(p) {
     role: 'player', day: S.day, week: S.week, dmOnline: dmOnline(),
     bids: S.offers.filter((o) => o.playerId === p.id).map(offerView),
     ledger: S.ledger.filter((e) => e.playerId === p.id).slice(-40),
-    me: { id: p.id, name: p.name, charId: p.charId, gold: p.gold, advantage: p.advantage, inventory: p.inventory },
+    me: { id: p.id, name: p.name, charId: p.charId, gold: p.gold, advantage: p.advantage,
+      inventory: p.inventory.map((x) => { const it = x.itemId && S.items.find((i) => i.id === x.itemId); return { ...x, image: it ? it.image || null : null, thumb: it ? it.thumb || null : null }; }) },
     merchants: S.merchants.map((m) => ({
-      id: m.id, name: m.name, emoji: m.emoji, banned: isBanned(p.id, m.id),
+      id: m.id, name: m.name, emoji: m.emoji, portrait: m.portrait || null, banned: isBanned(p.id, m.id),
       revealed: S.revealed[bkey(p.id, m.id)] ? E.TYPES[m.type].name : null,
       insightTried: S.insightTries[`${bkey(p.id, m.id)}:${S.day}`] || null,
       affinity: affView(p.id, m.id),
       items: S.items.filter((i) => i.merchantId === m.id).map((i) => (i.minAffinity || 0) > affOf(p.id, m.id)
         ? { id: i.id, locked: true, need: i.minAffinity, needName: AFF.levels[affLevel(i.minAffinity)][0] }
-        : { id: i.id, name: i.name, price: i.price, magical: i.magical, stock: i.stock, minAffinity: i.minAffinity || 0 }),
+        : { id: i.id, name: i.name, price: i.price, magical: i.magical, stock: i.stock, minAffinity: i.minAffinity || 0, image: i.image || null, thumb: i.thumb || null }),
     })),
     negs,
   };
@@ -298,8 +339,14 @@ const D = {
     for (const k of Object.keys(S.negs)) if (k.endsWith(`:${it.id}`)) delete S.negs[k];
   },
   delete(b) {
-    if (b.kind === 'merchant') { S.merchants = S.merchants.filter((m) => m.id !== b.id); S.items = S.items.filter((i) => i.merchantId !== b.id); }
-    else if (b.kind === 'item') S.items = S.items.filter((i) => i.id !== b.id);
+    if (b.kind === 'merchant') {
+      const m = S.merchants.find((x) => x.id === b.id); if (m) unlinkMedia(m.portrait);
+      for (const i of S.items.filter((x) => x.merchantId === b.id)) { unlinkMedia(i.image); unlinkMedia(i.thumb); }
+      S.merchants = S.merchants.filter((x) => x.id !== b.id); S.items = S.items.filter((i) => i.merchantId !== b.id);
+    } else if (b.kind === 'item') {
+      const i = S.items.find((x) => x.id === b.id); if (i) { unlinkMedia(i.image); unlinkMedia(i.thumb); }
+      S.items = S.items.filter((x) => x.id !== b.id);
+    }
     else if (b.kind === 'player') { S.players = S.players.filter((p) => p.id !== b.id); }
     else fail('Bilinmeyen tür');
   },
@@ -356,6 +403,11 @@ const D = {
     S.week += 1;
     D.newday();
     log(`Haftalık Pazar: ${done.length} teslimat, yeni hafta ${S.week}`);
+  },
+  mediaclear(b) {
+    if (b.kind === 'item') { const i = itemOf(b.id); unlinkMedia(i.image); unlinkMedia(i.thumb); i.image = i.thumb = null; }
+    else if (b.kind === 'portrait') { const m = merchantOf(b.id); unlinkMedia(m.portrait); m.portrait = null; }
+    else fail('Tür geçersiz');
   },
   affinity(b) {
     const p = playerOf(b.playerId); merchantOf(b.merchantId);
@@ -422,6 +474,32 @@ async function api(req, res, url) {
     res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="defter.csv"' });
     return res.end('\ufeff' + ['zaman,hafta,gun,tur,oyuncu,satici,esya,tutar,etiket', ...rows].join('\n'));
   }
+  if (req.method === 'POST' && name === 'media') {
+    const a = auth(req.headers['x-token']);
+    if (!a || a.role !== 'dm') { req.resume(); return send(res, 403, { error: 'Yalnızca DM' }); }
+    try {
+      const kind = url.searchParams.get('kind'), variant = url.searchParams.get('variant') === 'thumb' ? 'thumb' : 'main';
+      if (kind !== 'item' && kind !== 'portrait') fail('Tür geçersiz');
+      const ent = kind === 'item' ? itemOf(url.searchParams.get('id')) : merchantOf(url.searchParams.get('id'));
+      const cap = kind === 'portrait' ? MEDIA_LIMITS.portrait : variant === 'thumb' ? MEDIA_LIMITS.thumb : MEDIA_LIMITS.item;
+      const buf = await readRaw(req, cap);
+      if (!buf.length) fail('Boş dosya');
+      const info = sniffImage(buf) || fail('Yalnızca PNG veya JPEG kabul edilir.');
+      if (info.w < MEDIA_LIMITS.minPx || info.h < MEDIA_LIMITS.minPx || info.w > MEDIA_LIMITS.maxPx || info.h > MEDIA_LIMITS.maxPx) fail(`Görsel ${MEDIA_LIMITS.minPx}–${MEDIA_LIMITS.maxPx} px olmalı.`);
+      const sub = kind === 'item' ? 'items' : 'portraits', dir = path.join(MEDIA_DIR, sub);
+      fs.mkdirSync(dir, { recursive: true });
+      const base = `${ent.id}${variant === 'thumb' ? '.t' : ''}`;
+      for (const e of ['png', 'jpg']) { try { fs.unlinkSync(path.join(dir, `${base}.${e}`)); } catch {} }
+      fs.writeFileSync(path.join(dir, `${base}.${info.ext}`), buf);
+      const rel = `/media/${sub}/${base}.${info.ext}?v=${Date.now().toString(36)}`; // ?v= önbellek tazeler
+      if (kind === 'item') { if (variant === 'thumb') ent.thumb = rel; else ent.image = rel; } else ent.portrait = rel;
+      broadcast();
+      return send(res, 200, { url: rel, w: info.w, h: info.h, bytes: buf.length });
+    } catch (e) {
+      if (e instanceof HttpError) return send(res, e.code, { error: e.message });
+      console.error(e); return send(res, 500, { error: 'Sunucu hatası' });
+    }
+  }
   if (req.method !== 'POST') return send(res, 404, { error: 'Yok' });
   const b = await readBody(req);
   try {
@@ -461,6 +539,16 @@ async function api(req, res, url) {
   }
 }
 
+function serveMedia(req, res, url) {
+  const f = mediaFileOf(url.pathname);
+  if (!f) { res.writeHead(404); return res.end('Yok'); }
+  fs.readFile(f, (err, data) => {
+    if (err) { res.writeHead(404); return res.end('Yok'); }
+    res.writeHead(200, { 'content-type': MEDIA_MIME[path.extname(f).slice(1)], 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' });
+    res.end(data);
+  });
+}
+
 function serveStatic(req, res, url) {
   const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
   const file = path.join(PUBLIC, rel);
@@ -475,6 +563,7 @@ function serveStatic(req, res, url) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname.startsWith('/api/')) return api(req, res, url).catch((e) => send(res, e.code || 500, { error: e.message }));
+  if (url.pathname.startsWith('/media/')) return serveMedia(req, res, url);
   serveStatic(req, res, url);
 });
 setInterval(() => { for (const c of clients) c.res.write(': ♥\n\n'); }, 25000).unref();

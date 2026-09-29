@@ -6,6 +6,7 @@ const path = require('path');
 process.env.DATA_FILE = path.join(os.tmpdir(), `pazar-api-${process.pid}.json`);
 process.env.DM_PIN = '9999';
 process.env.PIN_LOCK_MS = '300';
+process.env.MEDIA_DIR = path.join(os.tmpdir(), `pazar-media-${process.pid}`);
 const { server } = require('../server');
 
 let base, dm, ali, veli, items;
@@ -13,6 +14,22 @@ const call = async (name, body, tok) => {
   const r = await fetch(`${base}/api/${name}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': tok || '' }, body: JSON.stringify(body || {}) });
   return { status: r.status, body: await r.json() };
 };
+// Geçerli, küçük bir PNG üretir (w×h, tek renk).
+function makePng(w, h) {
+  const zlib = require('zlib');
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const t = Buffer.from(type), len = Buffer.alloc(4), cr = Buffer.alloc(4); len.writeUInt32BE(data.length); cr.writeUInt32BE(crc(Buffer.concat([t, data]))); return Buffer.concat([len, t, data, cr]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const raw = Buffer.alloc((w * 3 + 1) * h, 0x40);
+  for (let y = 0; y < h; y++) raw[y * (w * 3 + 1)] = 0;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+const upload = async (qs, body, tok, type = 'image/png') => {
+  const r = await fetch(`${base}/api/media?${qs}`, { method: 'POST', headers: { 'x-token': tok || '', 'content-type': type }, body });
+  return { status: r.status, body: await r.json().catch(() => ({})) };
+};
+const getRaw = async (rel) => { const r = await fetch(`${base}${rel}`); return { status: r.status, type: r.headers.get('content-type'), sec: r.headers.get('x-content-type-options'), buf: Buffer.from(await r.arrayBuffer()) }; };
 const get = async (name, tok) => {
   const r = await fetch(`${base}/api/${name}`, { headers: { 'x-token': tok || '' } });
   return { status: r.status, text: await r.text() };
@@ -207,4 +224,78 @@ test('PIN hız sınırı: art arda yanlış denemede kilitlenir, süre dolunca a
   assert.equal((await call('dm/login', { pin: '9999' })).status, 429); // doğru PIN de kilitliyken reddedilir
   await new Promise((r) => setTimeout(r, 400));
   assert.equal((await call('dm/login', { pin: '9999' })).status, 200);
+});
+
+test('medya: DM eşya görseli yükler, sunucu doğrular ve sunar', async () => {
+  const it = item('Uzun Kılıç');
+  const png = makePng(64, 64);
+  const r = await upload(`kind=item&id=${it.id}`, png, dm);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.match(r.body.url, /^\/media\/items\/[0-9a-f]+\.png\?v=/);
+  const f = await getRaw(r.body.url);
+  assert.equal(f.status, 200);
+  assert.equal(f.type, 'image/png');
+  assert.equal(f.sec, 'nosniff');
+  assert.ok(f.buf.equals(png));
+  // küçük resim ayrı alan
+  const t = await upload(`kind=item&id=${it.id}&variant=thumb`, makePng(32, 32), dm);
+  assert.equal(t.status, 200);
+  const view = await snap(ali);
+  const shown = view.merchants.find((m) => m.id === it.merchantId).items.find((x) => x.id === it.id);
+  assert.equal(shown.image, r.body.url);
+  assert.equal(shown.thumb, t.body.url);
+});
+
+test('medya: yetki, tür, boyut ve sınır denetimleri', async () => {
+  const it = item('Zincir Zırh');
+  const png = makePng(64, 64);
+  assert.equal((await upload(`kind=item&id=${it.id}`, png, ali)).status, 403);   // oyuncu
+  assert.equal((await upload(`kind=item&id=${it.id}`, png, '')).status, 403);    // giriş yok
+  assert.equal((await upload(`kind=item&id=${it.id}`, Buffer.from('bu bir resim degil, düz metin ......'), dm)).status, 400);
+  assert.equal((await upload(`kind=item&id=${it.id}`, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'), dm, 'image/svg+xml')).status, 400); // SVG yok
+  assert.equal((await upload(`kind=item&id=${it.id}`, makePng(16, 16), dm)).status, 400);   // çok küçük
+  assert.equal((await upload(`kind=item&id=${it.id}`, makePng(3000, 2), dm)).status, 400);  // çok büyük
+  const big = Buffer.concat([png.subarray(0, 24), Buffer.alloc(800 * 1024)]);
+  assert.equal((await upload(`kind=item&id=${it.id}`, big, dm)).status, 413);                // 700 KB üstü
+  assert.equal((await upload('kind=item&id=yok', png, dm)).status, 404);
+  assert.equal((await upload(`kind=silah&id=${it.id}`, png, dm)).status, 400);
+});
+
+test('medya: JPEG kabul edilir, satıcı portresi yüklenir', async () => {
+  // SOF0 işaretli minimal JPEG üstbilgisi (64×64)
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x40, 0x00, 0x40, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9]);
+  const r = await upload('kind=portrait&id=m2', jpg, dm, 'image/jpeg');
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.match(r.body.url, /^\/media\/portraits\/m2\.jpg\?v=/);
+  const f = await getRaw(r.body.url);
+  assert.equal(f.type, 'image/jpeg');
+  assert.equal((await snap(ali)).merchants.find((m) => m.id === 'm2').portrait, r.body.url);
+  // yeniden yükleme eski uzantıyı temizler
+  const r2 = await upload('kind=portrait&id=m2', makePng(64, 64), dm);
+  assert.match(r2.body.url, /m2\.png/);
+  assert.equal((await getRaw(r.body.url.replace('?v', '?x'))).status, 404); // jpg dosyası silindi
+});
+
+test('medya: yol atlatma denemeleri engellenir', async () => {
+  for (const p of ['/media/../server.js', '/media/..%2fserver.js', '/media/%2e%2e/server.js', '/media/items/../../package.json', '/media/items/yok.png', '/media/items/x.txt']) {
+    const f = await getRaw(p);
+    assert.ok([403, 404].includes(f.status), `${p} -> ${f.status}`);
+    assert.ok(!f.buf.toString().includes('require('), p);
+  }
+});
+
+test('medya: temizleme ve silme dosyayı da kaldırır', async () => {
+  const it = item('Uzun Kılıç');
+  const cur = (await snap(dm)).items.find((x) => x.id === it.id);
+  assert.ok(cur.image);
+  assert.equal((await call('dm/mediaclear', { kind: 'item', id: it.id }, dm)).status, 200);
+  assert.equal((await getRaw(cur.image)).status, 404);
+  assert.equal((await getRaw(cur.thumb)).status, 404);
+  const after = (await snap(dm)).items.find((x) => x.id === it.id);
+  assert.equal(after.image, null);
+  // eşya silinince dosyası da gider
+  const up = await upload(`kind=item&id=${item('Çadır').id}`, makePng(64, 64), dm);
+  assert.equal(up.status, 200);
+  await call('dm/delete', { kind: 'item', id: item('Çadır').id }, dm);
+  assert.equal((await getRaw(up.body.url)).status, 404);
 });

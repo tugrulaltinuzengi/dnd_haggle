@@ -79,12 +79,12 @@ public class MainActivity extends Activity {
     private void askUrl(final boolean cancelable) {
         final EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        input.setHint("https://pazar-xxxx.onrender.com");
+        input.setHint("https://cihaz.tailnet.ts.net");
         input.setText(serverUrl());
         input.setSelectAllOnFocus(true);
         AlertDialog.Builder b = new AlertDialog.Builder(this)
                 .setTitle("Pazar sunucusu")
-                .setMessage("Render adresini gir.")
+                .setMessage("Sunucu adresini gir.\nTailscale HTTPS: https://…\nESP32 (HTTP): http://cihaz.tailnet.ts.net:3000")
                 .setView(input)
                 .setCancelable(cancelable)
                 .setPositiveButton("Bağlan", (d, w) -> {

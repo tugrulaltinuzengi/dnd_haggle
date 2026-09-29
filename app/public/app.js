@@ -34,6 +34,40 @@ function connect() {
 }
 function logout() { addr = null; addrTried = false; if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false, flt: 'all', form: false, f: { mid: null, iid: '', name: '', price: '', note: '' } }; render(); }
 
+// ---- görsel yükleme: tarayıcıda kırp + yeniden boyutlandır + yeniden kodla (EXIF gider), sunucu yine doğrular ----
+async function fitBlob(file, w, h, type, q) {
+  const bmp = await createImageBitmap(file);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const k = Math.min(bmp.width / w, bmp.height / h), sw = w * k, sh = h * k; // ortadan kırp (portrede üste yakın)
+  c.getContext('2d').drawImage(bmp, (bmp.width - sw) / 2, type === 'image/jpeg' ? Math.min((bmp.height - sh) / 4, bmp.height - sh) : (bmp.height - sh) / 2, sw, sh, 0, 0, w, h);
+  return new Promise((r) => c.toBlob(r, type, q));
+}
+async function putMedia(kind, id, variant, blob) {
+  const r = await fetch(`/api/media?kind=${kind}&id=${encodeURIComponent(id)}&variant=${variant}`, { method: 'POST', headers: { 'x-token': auth.token, 'content-type': blob.type }, body: blob });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { toast(j.error || 'Yüklenemedi'); const e = new Error(j.error || 'Yüklenemedi'); e.shown = true; throw e; }
+}
+async function uploadImage(kind, id, file) {
+  toast('Görsel hazırlanıyor');
+  try {
+    if (kind === 'item') {
+      let blob;
+      for (const sz of [512, 384, 256]) { blob = await fitBlob(file, sz, sz, 'image/png'); if (blob.size <= 700 * 1024) break; } // PNG çok büyükse küçült
+      await putMedia('item', id, 'main', blob);
+      await putMedia('item', id, 'thumb', await fitBlob(file, 128, 128, 'image/png'));
+    } else {
+      await putMedia('portrait', id, 'main', await fitBlob(file, 768, 512, 'image/jpeg', 0.85));
+    }
+    toast('Görsel yüklendi');
+  } catch (e) { if (!e || !e.shown) toast('Görsel yüklenemedi'); }
+}
+function pickImage(kind, id) {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = () => { if (inp.files && inp.files[0]) uploadImage(kind, id, inp.files[0]); };
+  inp.click();
+}
+
 async function loadAddr() {
   try { const r = await fetch('/api/address', { headers: { 'x-token': auth.token } }); addr = await r.json(); render(); } catch {}
 }
@@ -74,9 +108,10 @@ const FILTERS = [['all', 'Tümü'], ['weapon', 'Silah'], ['armor', 'Zırh'], ['p
 const BAG_SLOTS = 18;
 
 // Görsel alanı: görsel varsa arka plan, yoksa yazı kutusu (tür + ad).
-function art(i, { cls = '', label = null, extra = '' } = {}) {
+function art(i, { cls = '', label = null, extra = '', thumb = false } = {}) {
   const lb = label || (i.magical ? 'Büyülü · ' : '') + LABEL[itemType(i)];
-  if (i.image) return `<span class="art ${cls} ${i.magical ? 'mg' : ''}" style="background-image:url('${esc(i.image)}')">${extra}</span>`;
+  const src = thumb ? i.thumb || i.image : i.image;
+  if (src) return `<span class="art ${cls} ${i.magical ? 'mg' : ''}" title="${esc(i.name)}" style="background-image:url('${esc(src)}')">${extra}</span>`;
   return `<span class="art ${cls} ${i.magical ? 'mg' : ''}"><span class="artlabel">${esc(lb)}</span><span class="artname">${esc(i.name)}</span>${extra}</span>`;
 }
 function portrait(m, opt = {}) {
@@ -158,7 +193,7 @@ function renderBag(me) {
   const n = Math.max(BAG_SLOTS, Math.ceil(me.inventory.length / 3) * 3);
   const slots = Array.from({ length: n }, (_, k) => {
     const i = me.inventory[k];
-    return i ? `<div class="bslot ${i.damaged ? 'dmg' : ''}">${art(i, { label: i.damaged ? 'Kusurlu' : null })}<span class="bp">${fmt(i.paid)}</span></div>` : '<div class="bslot"></div>';
+    return i ? `<div class="bslot ${i.damaged ? 'dmg' : ''}">${art(i, { label: i.damaged ? 'Kusurlu' : null, thumb: true })}<span class="bp">${fmt(i.paid)}</span></div>` : '<div class="bslot"></div>';
   }).join('');
   const ledger = S.ledger.slice().reverse();
   return `<div class="bagbar"><span>Çanta</span><span>${me.inventory.length}/${n}</span></div><div class="bag">${slots}</div>
@@ -261,9 +296,9 @@ function renderDM() {
           ${isOpen(o) ? `<div class="tl">${o.status === 'new' ? `<button class="btn sm ok" data-dacc="${o.id}">Kabul</button>` : ''}<button class="btn sm" data-dcnt="${o.id}">Karşı teklif</button><button class="btn sm ghost" data-drej="${o.id}">Reddet</button></div>` : ''}</div>`; }).join('') || '<p class="empty">Bu listede teklif yok.</p>'}</div>`;
   } else if (dmTab === 'market') {
     body = `<button class="btn sm" data-act="addm">+ Satıcı</button>` + S.merchants.map((m) => `
-      <div class="card" style="text-align:left;margin-top:10px"><div class="row"><span class="pico" style="width:40px;height:40px">${esc(initial(m.name))}</span><b class="grow" style="margin:0">${esc(m.name)}</b><button class="btn sm ghost" data-editm="${m.id}">Düzenle</button><button class="btn sm ghost" data-del="merchant|${m.id}">Sil</button></div>
+      <div class="card" style="text-align:left;margin-top:10px"><div class="row"><span class="pico" style="width:40px;height:40px">${esc(initial(m.name))}</span><b class="grow" style="margin:0">${esc(m.name)}</b><button class="btn sm ghost" data-img="portrait|${m.id}">Portre</button>${m.portrait ? `<button class="btn sm ghost" data-imgdel="portrait|${m.id}">Portreyi kaldır</button>` : ''}<button class="btn sm ghost" data-editm="${m.id}">Düzenle</button><button class="btn sm ghost" data-del="merchant|${m.id}">Sil</button></div>
         <div class="seg">${Object.entries(TYPE_LABEL).map(([k, l]) => `<button class="${m.type === k ? 'on' : ''}" data-mtype="${m.id}|${k}">${l}</button>`).join('')}</div>
-        ${S.items.filter((i) => i.merchantId === m.id).map((i) => `<div class="row" style="padding:4px 0"><span class="grow">${esc(i.name)}${i.magical ? ' <span class="tag mg">büyülü</span>' : ''}${i.minAffinity ? ` <span class="tag">yakınlık ${i.minAffinity}+</span>` : ''}${i.stock !== null ? ` <small>(${i.stock})</small>` : ''}</span><span class="price">${fmt(i.price)}</span><button class="btn sm ghost" data-editi="${i.id}">Düzenle</button><button class="btn sm ghost" data-del="item|${i.id}">Sil</button></div>`).join('')}
+        ${S.items.filter((i) => i.merchantId === m.id).map((i) => `<div class="row" style="padding:4px 0"><span class="grow">${i.image ? `<span class="mini" style="background-image:url('${esc(i.thumb || i.image)}')"></span>` : ''}${esc(i.name)}${i.magical ? ' <span class="tag mg">büyülü</span>' : ''}${i.minAffinity ? ` <span class="tag">yakınlık ${i.minAffinity}+</span>` : ''}${i.stock !== null ? ` <small>(${i.stock})</small>` : ''}</span><span class="price">${fmt(i.price)}</span><button class="btn sm ghost" data-img="item|${i.id}">Görsel</button>${i.image ? `<button class="btn sm ghost" data-imgdel="item|${i.id}">Kaldır</button>` : ''}<button class="btn sm ghost" data-editi="${i.id}">Düzenle</button><button class="btn sm ghost" data-del="item|${i.id}">Sil</button></div>`).join('')}
         <button class="btn sm ghost" data-addi="${m.id}">+ Eşya</button></div>`).join('');
   } else if (dmTab === 'players') {
     body = addrCard() + `<h2>Oyuncular</h2><div class="list">${S.players.map((p) => `
@@ -325,6 +360,8 @@ $app.addEventListener('click', async (e) => {
   if (d.ap) { view.approach = d.ap; return render(); }
   if (d.dtab) { dmTab = d.dtab; return render(); }
   if (d.bf) { dmFilter = d.bf; return render(); }
+  if (d.img) { const [k, id] = d.img.split('|'); return void pickImage(k, id); }
+  if (d.imgdel) { const [k, id] = d.imgdel.split('|'); if (confirm('Görsel kaldırılsın mı?')) act('dm/mediaclear', { kind: k, id }); return; }
   if (d.aff) { const [pid, mid, delta] = d.aff.split('|'); return void act('dm/affinity', { playerId: pid, merchantId: mid, delta: +delta }); }
   if (d.bacc) return void act('bidreply', { id: d.bacc, action: 'accept' });
   if (d.bwd) return void act('bidreply', { id: d.bwd, action: 'withdraw' });
