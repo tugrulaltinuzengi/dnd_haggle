@@ -1,6 +1,6 @@
 {
   "name": "pazar-app",
-  "version": "0.1.0",
+  "version": "0.12.3",
   "description": "D&D pazarlık uygulaması: oyuncu ve DM karşılıklı, canlı",
   "private": true,
   "scripts": {

@@ -33,7 +33,7 @@ function connect() {
     if (r) { auth = null; store.set(null); S = null; render(); } // sunucu ayakta ama token geçersiz
   };
 }
-function logout() { addr = null; addrTried = false; cfgDraft = null; edit = null; if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false, flt: 'all', form: false, f: { mid: null, iid: '', name: '', price: '', note: '' } }; render(); }
+function logout() { addr = null; addrTried = false; cfgDraft = null; edit = null; pw = { cur: '', nw: '', nw2: '' }; if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false, flt: 'all', form: false, f: { mid: null, iid: '', name: '', price: '', note: '' } }; render(); }
 
 // ---- görsel yükleme: tarayıcıda kırp + yeniden boyutlandır + yeniden kodla (EXIF gider), sunucu yine doğrular ----
 async function fitBlob(file, w, h, type, q) {
@@ -70,11 +70,24 @@ function pickImage(kind, id) {
 }
 
 // ---- DM: Yakınlık ayarları (tüm değerler DM'e ait) ----
+// DM şifresi formu: yeniden çizimde yazılanlar kaybolmasın diye taslakta tutulur.
+let pw = { cur: '', nw: '', nw2: '' };
+function passwordView() {
+  const f = (id, k, label, ac) => `<label class="fld"><span>${label}</span><input type="password" id="${id}" data-pw="${k}" maxlength="64" autocomplete="${ac}" value="${esc(pw[k])}"></label>`;
+  return `<h2>DM şifresi</h2>
+    <div class="card" style="text-align:left">
+      <p class="hint" style="text-align:left;margin-top:0">En az 6 karakter. Değiştirince bu cihaz dışındaki DM oturumları kapanır.</p>
+      ${f('pwcur', 'cur', 'Mevcut PIN / şifre', 'current-password')}
+      ${f('pwnew', 'nw', 'Yeni şifre', 'new-password')}
+      ${f('pwnew2', 'nw2', 'Yeni şifre (tekrar)', 'new-password')}
+      <button class="btn" id="passgo">Şifreyi değiştir</button>
+    </div>`;
+}
 function settingsView() {
   const st = S.settings.affinity, df = S.settings.defaults, names = S.settings.levelNames;
   const c = cfgDraft || (cfgDraft = JSON.parse(JSON.stringify(st)));
   const num = (path, label, min, max, hint) => `<label class="fld"><span>${label}${hint ? `<small>${hint}</small>` : ''}</span><input type="number" inputmode="numeric" min="${min}" max="${max}" data-cfg="${path}" id="cfg-${path.replace(/\./g, '-')}" value="${esc(path.split('.').reduce((o, k) => (o == null ? o : o[k]), c))}"></label>`;
-  return `<h2>Yakınlık ayarları</h2>
+  return `${passwordView()}<h2>Yakınlık ayarları</h2>
     <div class="card" style="text-align:left">
       <p class="hint" style="text-align:left;margin-top:0">Yakınlık, oyuncunun bir satıcıyla uzun vadeli ilişkisidir (0–100). <b>Tüm değerler senin</b>: masa testine göre ayarla. Anlık Pazar barına dokunmaz.</p>
       <div class="seg"><button class="${c.enabled ? 'on' : ''}" data-cfgtoggle="1">Açık</button><button class="${c.enabled ? '' : 'on'}" data-cfgtoggle="0">Kapalı</button></div>
@@ -225,8 +238,8 @@ function renderJoin() {
     ${SRV()}`;
 }
 function renderDMLogin() {
-  $app.innerHTML = `<h1>DM</h1><p class="sub">PIN'i gir.</p>
-    <input type="password" id="pin" inputmode="numeric" placeholder="PIN"><button class="btn" id="dmgo">Gir</button>
+  $app.innerHTML = `<h1>DM</h1><p class="sub">PIN'ini ya da şifreni gir.</p>
+    <input type="password" id="pin" placeholder="PIN / şifre" autocomplete="current-password"><button class="btn" id="dmgo">Gir</button>
     <button class="btn ghost" id="back">Geri</button>
     ${SRV()}`;
 }
@@ -418,6 +431,7 @@ $app.addEventListener('change', (e) => {
 });
 $app.addEventListener('input', (e) => {
   const t = e.target;
+  if (t.dataset && t.dataset.pw !== undefined) { pw[t.dataset.pw] = t.value; return; }
   if (t.dataset && t.dataset.cfg !== undefined && cfgDraft) { const path = t.dataset.cfg.split('.'); let o = cfgDraft; while (path.length > 1) o = o[path.shift()]; o[path[0]] = t.value; return; }
   if (t.dataset && t.dataset.ed !== undefined && edit) { edit[t.dataset.ed] = t.dataset.ed === 'magical' ? t.value === '1' : t.value; return; }
   const f = view.f, k = { 'f-name': 'name', 'f-price': 'price', 'f-note': 'note' }[e.target.id];
@@ -435,6 +449,12 @@ $app.addEventListener('click', async (e) => {
     const name = document.getElementById('name').value;
     if (!pick || !CH.find((c) => c.id === pick)) return toast('Karakter seç.');
     try { const r = await api('join', { name, charId: pick }); auth = r; store.set(r); connect(); } catch {}
+    return;
+  }
+  if (t.id === 'passgo') {
+    if (pw.nw.length < 6) return toast('Yeni şifre en az 6 karakter olmalı.');
+    if (pw.nw !== pw.nw2) return toast('Yeni şifreler aynı değil.');
+    try { await api('dm/password', { current: pw.cur, next: pw.nw }); pw = { cur: '', nw: '', nw2: '' }; toast('DM şifresi değişti.'); render(); } catch {}
     return;
   }
   if (t.id === 'dmgo') { try { const r = await api('dm/login', { pin: document.getElementById('pin').value }); auth = r; store.set(r); pick = null; connect(); } catch {} return; }

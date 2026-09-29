@@ -28,6 +28,15 @@ const token = () => crypto.randomBytes(16).toString('hex');
 
 const PIN_MAX = 5, PIN_LOCK_MS = +process.env.PIN_LOCK_MS || 10 * 60 * 1000;
 const pinFails = new Map(); // ip -> { n, until }
+// DM şifresi: ilk kurulumda DM_PIN. DM değiştirince tuzlu scrypt hash'i data.json'da saklanır (düz metin yok).
+// Unutulursa: sunucuyu bir kez DM_PASSWORD_RESET=1 ile başlat, DM_PIN yeniden geçerli olur.
+const hashPass = (pw, salt) => crypto.scryptSync(String(pw ?? ''), salt, 32).toString('hex');
+function checkDmPass(pw) {
+  const p = S.settings.dmPass;
+  if (!p) return String(pw ?? '') === DM_PIN;
+  const a = Buffer.from(hashPass(pw, p.salt), 'hex'), b = Buffer.from(p.hash, 'hex');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 function clientIp(req) {
   const ra = req.socket.remoteAddress || '', loop = /^(::1|127\.|::ffff:127\.)/.test(ra), xf = req.headers['x-forwarded-for'];
   return loop && xf ? String(xf).split(',')[0].trim() : ra; // tailscale serve ara sunucu olarak yerel adresten gelir
@@ -103,6 +112,7 @@ function seed() {
 let S;
 try { S = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { S = seed(); }
 S.offers ||= []; S.week ||= 1; S.ledger ||= []; S.affinity ||= {}; S.affinityWeek ||= {}; S.settings ||= {};
+if (process.env.DM_PASSWORD_RESET === '1' && S.settings.dmPass) { delete S.settings.dmPass; console.log('DM şifresi sıfırlandı: DM_PIN yeniden geçerli.'); }
 let saveT;
 function save() {
   clearTimeout(saveT);
@@ -476,6 +486,16 @@ const D = {
     S.affinity[affKey(p.id, b.merchantId)] = Math.max(0, Math.min(100, Math.round(v)));
     log(`DM: ${p.name} yakınlığı ${S.affinity[affKey(p.id, b.merchantId)]} yaptı (${merchantOf(b.merchantId).name})`, p.id);
   },
+  password(b, a) {
+    if (!checkDmPass(b.current)) fail('Mevcut şifre yanlış', 403);
+    const next = String(b.next ?? '');
+    if (next.length < 6 || next.length > 64) fail('Yeni şifre 6–64 karakter olmalı');
+    const salt = crypto.randomBytes(16).toString('hex');
+    S.settings.dmPass = { salt, hash: hashPass(next, salt) };
+    S.dm = [a.tok]; // bu oturum dışındaki DM oturumları kapanır
+    for (const c of clients) if (c.role === 'dm' && c.tok !== a.tok) { try { c.res.end(); } catch {} clients.delete(c); }
+    log('DM şifresi değiştirildi');
+  },
   newday() { S.day += 1; S.negs = {}; S.bans = {}; log(`Yeni gün: ${S.day}`); },
   line(b) {
     const n = S.negs[nkey(b.playerId, b.itemId)] || fail('Aktif pazarlık yok', 404);
@@ -493,7 +513,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 
 function auth(tok) {
   if (!tok) return null;
-  if (S.dm.includes(tok)) return { role: 'dm' };
+  if (S.dm.includes(tok)) return { role: 'dm', tok };
   const p = S.players.find((x) => x.token === tok);
   return p ? { role: 'player', p } : null;
 }
@@ -512,7 +532,7 @@ async function api(req, res, url) {
     const a = auth(url.searchParams.get('token'));
     if (!a) return send(res, 401, { error: 'Giriş gerekli' });
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive', 'x-accel-buffering': 'no' });
-    const c = { res, role: a.role, pid: a.p && a.p.id };
+    const c = { res, role: a.role, pid: a.p && a.p.id, tok: a.tok };
     clients.add(c);
     req.on('close', () => { clients.delete(c); broadcast(); });
     push(c);
@@ -572,7 +592,7 @@ async function api(req, res, url) {
     if (name === 'dm/login') {
       const ip = clientIp(req), f = pinFails.get(ip);
       if (f && f.until > Date.now()) fail('Çok fazla deneme. Bir süre bekle.', 429);
-      if (String(b.pin) !== DM_PIN) {
+      if (!checkDmPass(b.pin)) {
         const n = (f ? f.n : 0) + 1; // kilit süresi dolunca kayıt n=0 ile kalır
         pinFails.set(ip, n >= PIN_MAX ? { n: 0, until: Date.now() + PIN_LOCK_MS } : { n, until: 0 });
         fail('Yanlış PIN', 403);
@@ -585,7 +605,7 @@ async function api(req, res, url) {
     let out;
     if (name.startsWith('dm/')) {
       if (a.role !== 'dm') fail('Yalnızca DM', 403);
-      out = (D[name.slice(3)] || fail('Yok', 404))(b);
+      out = (D[name.slice(3)] || fail('Yok', 404))(b, a);
     } else {
       if (a.role !== 'player') fail('Yalnızca oyuncu', 403);
       (P[name] || fail('Yok', 404))(a.p, b);
