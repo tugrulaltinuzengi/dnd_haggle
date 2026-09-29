@@ -18,6 +18,10 @@ android {
             storePassword 'pazar-debug'
             keyAlias 'pazar-debug'
             keyPassword 'pazar-debug'
+            // v1'den v3'e tüm imza şemaları: en katı kurucular (OEM, eski Android 7.x) için en uyumlu
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 

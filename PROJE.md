@@ -11,7 +11,7 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 
 ## 1. Durum
 
-**Şu anki sürüm: 0.12.1.** Ayrıntı Bölüm 12.
+**Şu anki sürüm: 0.12.2.** Ayrıntı Bölüm 12.
 
 **Çalışan:** kural motoru, canlı sunucu (DM + oyuncular, SSE), 6 karakter, pazarlık (zar, **Pazar** barı, Hard Gamble, Sez), **Yakınlık** sistemi (ayrı uzun vadeli bar, **tüm değerleri DM ayarlar**), teklifler (CRM hattı) ve Haftalık Pazar, alışveriş defteri (filtre + CSV), karanlık tema, masaüstü düzeni, Tailscale araçları, **davet adresi QR kodu**, PIN hız sınırı, yedek ve başlatma betikleri, medya katmanı, **DM eşya editörü** (açıklama, tür, nadirlik, görsel, varyant), Android WebView kabuğu. 50 birim/API/araç testi ve 6 senaryolu tarayıcı testi geçiyor. Kod: [app/](app/), [android/](android/).
 
@@ -170,7 +170,13 @@ Her altın hareketi kaydedilir: `{ t, hafta, gün, tür (alım, hard gamble, tek
 `render.yaml` ve `app/Dockerfile` hazır: Render → **New → Blueprint** → repo. Panelde **`DM_PIN`** gir. Kalıcı disk ücretli plan ister (starter), ücretsiz planda uyanınca pazar sıfırlanır. Sağlık kontrolü `/api/chars`. Docker imajı bu ortamda derlenemedi, aynı ortam değişkenleriyle `node server.js` doğrulandı. Kendi sunucunda: `docker build -t pazar app && docker run -p 3000:3000 -e NODE_ENV=production -e DM_PIN=xxxx -e PORT=3000 -v pazar-data:/data pazar`. Erişim Tailscale ile olacağı için Render şu an gereksiz, dosyalar yedek olarak duruyor.
 
 ### Android APK
-`android/` ince bir WebView kabuğu (oyun mantığı sunucuda). GitHub Actions derler (`.github/workflows/apk.yml`, derleme başarılı). **İndir:** GitHub → Actions → APK → son çalışma → Artifacts → `pazar-apk` (giriş gerekir, 90 gün). **Yeniden derle:** Run workflow, Render adresini kutuya yazarsan APK'ya gömülür. Kur: bilinmeyen kaynaklara izin ver, debug imzalıdır. İlk açılışta adresi sorar (Tailscale HTTPS adresi girilir), giriş ekranındaki **Sunucu adresi** düğmesiyle değişir. Yalnızca `https://` (`usesCleartextTraffic=false`). DM'in `prompt/confirm` pencereleri köprülü. **Cihazda henüz denenmedi.** **Kurulum hatası ("Uygulama yüklenemedi", 0.12.1'de düzeltildi):** CI her derlemede yeni rastgele imza anahtarı üretiyordu ve iki derlemenin sürüm numarası aynıydı, bu yüzden yeni APK eskisinin üstüne kurulamıyordu. Artık **sabit imza anahtarı** (`android/app/pazar-debug.keystore`, yalnızca kişisel/debug kullanım, Play Store anahtarı değil) ve **CI çalışma numarasıyla artan sürüm kodu** var. **Telefonda daha önce Pazar kuruluysa bir kez kaldırıp yeniden kurun** (eski imzayla çakışır), sonraki güncellemeler üstüne kurulur. İndirilen dosya bir **zip**'tir: önce açın, içindeki `pazar.apk`'yı kurun. CI ayrıca APK'yı doğrular (imza, paket, SDK, izinler, boyut) ve sonucu iş günlüğüne yazar. Android araçları `dl.google.com` üzerinde, bu ortamın ağ politikası engelliyor, o yüzden derleme CI'da.
+`android/` ince bir WebView kabuğu (oyun mantığı sunucuda). GitHub Actions derler (`.github/workflows/apk.yml`, derleme başarılı). **İndir:** GitHub → Actions → APK → son çalışma → Artifacts → `pazar-apk` (giriş gerekir, 90 gün). **Yeniden derle:** Run workflow, Render adresini kutuya yazarsan APK'ya gömülür. Kur: bilinmeyen kaynaklara izin ver, debug imzalıdır. İlk açılışta adresi sorar (Tailscale HTTPS adresi girilir), giriş ekranındaki **Sunucu adresi** düğmesiyle değişir. Yalnızca `https://` (`usesCleartextTraffic=false`). DM'in `prompt/confirm` pencereleri köprülü. **Cihazda henüz denenmedi.** **Kurulum hatası ("Uygulama yüklenemedi", 0.12.1'de düzeltildi):** CI her derlemede yeni rastgele imza anahtarı üretiyordu ve iki derlemenin sürüm numarası aynıydı, bu yüzden yeni APK eskisinin üstüne kurulamıyordu. Artık **sabit imza anahtarı** (`android/app/pazar-debug.keystore`, yalnızca kişisel/debug kullanım, Play Store anahtarı değil) ve **CI çalışma numarasıyla artan sürüm kodu** var. **Telefonda daha önce Pazar kuruluysa bir kez kaldırıp yeniden kurun** (eski imzayla çakışır), sonraki güncellemeler üstüne kurulur. İndirilen dosya bir **zip**'tir: önce açın, içindeki `pazar.apk`'yı kurun. CI ayrıca APK'yı doğrular (imza, paket, SDK, izinler, boyut) ve sonucu iş günlüğüne yazar.
+
+**Sorun giderme ("Uygulama yüklenemedi"):** CI doğrulaması 0.12.1'de APK'nın **geçerli** olduğunu gösterdi (paket `app.pazar`, hedef SDK 34, imza doğrulandı, 15 KB). Hata eski sürümle çakışma değildi (silip denenince sürdü), yani telefona özgü olabilir. 0.12.2'de uyumluluk sıkılaştırıldı: **v1+v2+v3 imza**, **SHA-256** sertifika, standart **adaptive/vektör simgeler**. Yine de kurulmuyorsa:
+1. **Kesin nedeni öğren:** PC'ye USB ile bağla (Geliştirici seçenekleri → USB hata ayıklama), `adb install pazar.apk` çalıştır. Çıktı tam kodu verir (`INSTALL_FAILED_…`, `INSTALL_PARSE_FAILED_…`). Bu, tahminden çok daha kesindir.
+2. **Kurucu engelleri:** Google Play Protect ("Uygulamaları tara"yı geçici kapat ya da "Yine de yükle"), Samsung **Auto Blocker** (kapat), Xiaomi **MIUI/HyperOS** "MIUI optimizasyonu" ve "USB üzerinden yükle" seçenekleri, kullanıcı/**Güvenli Klasör/ikiz uygulama** içinde kurulu eski kopya.
+3. **Dosya:** GitHub'dan inen `pazar-apk.zip` önce **açılmalı**, içindeki `pazar.apk` yüklenmeli. APK'yı zip içinden ya da WhatsApp/e-posta önizlemesinden değil, **Dosyalar/İndirilenler** uygulamasından aç.
+4. **APK'sız test:** PC'de sunucu çalışırken telefon aynı Wi-Fi'de tarayıcıdan `http://<PC-IP>:3000` adresini açabilir (APK yalnızca ESP'nin HTTP'si ve tam ekran deneyimi için gerekli). Android araçları `dl.google.com` üzerinde, bu ortamın ağ politikası engelliyor, o yüzden derleme CI'da.
 
 ---
 
@@ -452,7 +458,8 @@ Cevaplananlar: ekran kartı ve ComfyUI (6 GB, kurulu değil), tezgâh kuralları
 3. **Yedek yol:** Spike başarısız olursa ya da tam port yorucu bulunursa Raspberry Pi Zero 2 W'ye (Node kodu değişmeden, resmî Tailscale, HTTPS) dönmeye razı mısınız?
 4. **Eşya türleri ve nadirlik listesi** uygun mu? (Tür: Silah, Zırh, İksir, Tomar, Tılsım, Gereç, Eşya. Nadirlik: Sıradan, Seyrek, Nadir, Çok nadir, Efsanevi, Artefakt.)
 5. **5e.tools** yerel kopyası, **Crooked Moon** kaynağı (Foundry paketi mi PDF mi), hazır **portreler**.
-6. **Sıradaki adım hangisi?** (a) Spike 1 yönergesi ve firmware taslağı, (b) V3b oyuncu tezgâhı, (c) V-POLL sorgu modu (ESP için gerekli).
+6. **APK kurulum hatası:** telefon **marka/model** ve **Android sürümü**? Hata ekranındaki tam metin ya da ekran görüntüsü? `adb install pazar.apk` çıktısı (varsa)? Play Protect / Auto Blocker açık mı? Dosyayı hangi uygulamayla açtınız?
+7. **Sıradaki adım hangisi?** (a) Spike 1 yönergesi ve firmware taslağı, (b) V3b oyuncu tezgâhı, (c) V-POLL sorgu modu (ESP için gerekli).
 
 ---
 
@@ -496,7 +503,11 @@ Gözlem soruları: açgözlü satıcı nötrden zor hissettirdi mi? Oyuncular ba
 
 Kural: her commit'te ilgili girdi eklenir. Numara: **0.x** geliştirme sürümleri, **v1.0** ilk kararlı hedef. Saatler UTC, tarih 29 Eylül 2026. **En yeni en üstte.**
 
-### 0.12.1 · APK kurulum düzeltmesi (bu commit)
+### 0.12.2 · APK uyumluluğu sıkılaştırıldı (bu commit)
+- **Kod:** APK imzası **v1+v2+v3**, sertifika **SHA-256** (öncekinde JDK varsayılanı SHA-384 idi), **adaptive** (API 26+) ve **vektör** (API 24-25) launcher simgeleri (`@mipmap/ic_launcher`), CI doğrulama çıktısı genişletildi (min/target SDK, simge, ABI).
+- **Plan / hata:** Kullanıcı eski sürümü silip denemesine rağmen "Uygulama yüklenemedi" almaya devam etti. CI günlüğü APK'yı **geçerli** buldu (paket `app.pazar`, sürüm kodu 5, hedef SDK 34, tek imzacı, 15,3 KB, yalnızca v2 imzalı), yani neden büyük olasılıkla telefona özgü. Telefondan tam neden (`adb install` çıktısı, marka/model, Android sürümü) beklenirken uyumluluk artırıldı. Çakışma varsayımı çürütüldü. Sorun giderme adımları APK bölümüne yazıldı. **Not:** imza anahtarı yeniden üretildi, önceki 0.12.1 APK'sının üstüne kurulmaz (zaten kurulamıyordu).
+
+### 0.12.1 · APK kurulum düzeltmesi (e273235)
 - **Kod:** APK için **sabit imza anahtarı** ve **CI çalışma numarasıyla artan sürüm kodu/adı** (`0.12.<no>`), CI'da **APK doğrulama adımı** (`apksigner verify`, `aapt2 dump badging`, içerik listesi, SHA-256).
 - **Plan / hata:** Kullanıcı "Uygulama yüklenemedi (14 KB)" bildirdi. En olası neden: her CI derlemesi farklı rastgele imza anahtarıyla imzalanıyordu ve sürüm kodu hep 1'di, bu yüzden daha önce kurulu sürümün üstüne kurulamıyordu. Cihazda test edilemedi, doğrulama CI günlüğünden. Not: sabit anahtar depoda (kişisel debug amaçlı), Play Store için kullanılmaz.
 
