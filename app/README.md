@@ -13,11 +13,16 @@ npm run e2e                       # iki telefonlu tarayıcı testi (playwright g
 ```
 Telefonda aç, "Ana ekrana ekle" ile uygulama gibi kur. DM için giriş ekranında **Ben DM'im** + PIN.
 
-## Sürekli açık yayın
-Herhangi bir Node ya da Docker barındırıcısı yeter (Render, Fly.io, Railway, kendi sunucun).
-- Ortam değişkenleri: `PORT`, `DM_PIN` (**değiştir**), `DATA_FILE` (kalıcı diske işaret etmeli, yoksa yeniden başlatınca pazar sıfırlanır).
-- Docker: `docker build -t pazar app && docker run -p 3000:3000 -e DM_PIN=xxxx -v pazar-data:/data pazar`
-- HTTPS gerekir (telefonda kurulum ve bağlantı için barındırıcılar bunu verir).
+## Render'a yayınla
+Repo kökündeki `render.yaml` ve `app/Dockerfile` hazır.
+1. Render → **New → Blueprint** → bu repoyu ve `ccr-7ab72bbd-hctq3y` dalını (ya da birleştirdiğin dalı) seç.
+2. **DM_PIN** ortam değişkenini panelde gir (`sync: false`, repoda saklanmaz). PIN yoksa sunucu üretimde bilerek başlamaz.
+3. Deploy bitince adres `https://pazar-xxxx.onrender.com` olur. Oyuncular bunu telefonda açıp "Ana ekrana ekle" yapar.
+
+Notlar:
+- **Kalıcı disk** (`/data`, pazarın kaydı) Render'da ücretli plan ister (`starter`). Ücretsiz planda disk yoktur: uygulama uyur, uyanınca pazar seed'e döner. Ücretsiz denemek için `render.yaml` içinde `plan: free` yap ve `disk:` bloğunu sil.
+- Sağlık kontrolü `/api/chars`. Canlı bağlantılar (SSE) Render'da çalışır.
+- Kendi sunucunda: `docker build -t pazar app && docker run -p 3000:3000 -e NODE_ENV=production -e DM_PIN=xxxx -e PORT=3000 -v pazar-data:/data pazar`
 
 ## Oyuncu
 1. 6 karakterden birini seç (🗣️ İkna · 🎭 Blöf · 💢 Gözdağı bonusları, başlangıç altını). Adını yaz.

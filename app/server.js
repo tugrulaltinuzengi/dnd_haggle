@@ -7,6 +7,10 @@ const crypto = require('crypto');
 const E = require('./engine');
 
 const PORT = +process.env.PORT || 3000;
+if (process.env.NODE_ENV === 'production' && !process.env.DM_PIN) {
+  console.error('DM_PIN ayarlanmadan üretimde başlamam. Render panelinde DM_PIN ortam değişkenini gir.');
+  process.exit(1);
+}
 const DM_PIN = process.env.DM_PIN || '1234';
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const PUBLIC = path.join(__dirname, 'public');
@@ -376,6 +380,6 @@ const server = http.createServer((req, res) => {
 setInterval(() => { for (const c of clients) c.res.write(': ♥\n\n'); }, 25000).unref();
 
 if (require.main === module) {
-  server.listen(PORT, () => console.log(`Pazar açık: http://localhost:${PORT}  (DM PIN: ${DM_PIN})`));
+  server.listen(PORT, () => console.log(`Pazar açık: http://localhost:${PORT}` + (process.env.NODE_ENV === 'production' ? '' : `  (DM PIN: ${DM_PIN})`)));
 }
 module.exports = { server };

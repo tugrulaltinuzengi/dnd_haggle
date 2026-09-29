@@ -1,0 +1,21 @@
+# Render Blueprint: Dashboard → New → Blueprint → bu repoyu seç.
+# Kalıcı disk ücretli plan ister (starter). Ücretsiz planda pazar her uyandığında sıfırlanır.
+services:
+  - type: web
+    name: pazar
+    runtime: docker
+    dockerfilePath: ./app/Dockerfile
+    dockerContext: ./app
+    plan: starter
+    region: frankfurt
+    healthCheckPath: /api/chars
+    autoDeploy: true
+    envVars:
+      - key: DM_PIN
+        sync: false        # Render panelinde sen gir
+      - key: DATA_FILE
+        value: /data/data.json
+    disk:
+      name: pazar-data
+      mountPath: /data
+      sizeGB: 1
