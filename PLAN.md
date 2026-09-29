@@ -30,7 +30,9 @@ Formül f = X − a·u/2 · DC 12 / 15 / 18 · Rep 4 / 3 / 2 · Y < X/4 zarsız 
 - [x] 5 API testi + tarayıcı senaryosu.
 
 ## Aşama 5 — Yayın
-- [ ] Barındırıcı seç (Render / Fly.io / Railway / kendi sunucu), `DM_PIN` belirle, kalıcı disk bağla.
+- [x] Render hazırlığı: `render.yaml`, sertleştirilmiş `Dockerfile`, üretimde `DM_PIN` zorunlu.
+- [x] Android WebView kabuğu ve CI ile APK derlemesi (CI başarılı, `pazar-apk` çıktısı). Gerçek cihazda henüz denenmedi.
+- [ ] Render'da yayınla: Blueprint ile repoyu bağla, `DM_PIN` gir.
 - [ ] Adresi oyuncularla paylaş, iki gerçek telefonla dene.
 - Adımlar: [app/README.md](app/README.md)
 

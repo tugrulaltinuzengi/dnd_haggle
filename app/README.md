@@ -24,6 +24,15 @@ Notlar:
 - Sağlık kontrolü `/api/chars`. Canlı bağlantılar (SSE) Render'da çalışır.
 - Kendi sunucunda: `docker build -t pazar app && docker run -p 3000:3000 -e NODE_ENV=production -e DM_PIN=xxxx -e PORT=3000 -v pazar-data:/data pazar`
 
+## Android APK
+`android/` klasörü sunucuyu tam ekran gösteren ince bir WebView kabuğudur (oyun mantığı sunucuda). GitHub Actions derler ([.github/workflows/apk.yml](../.github/workflows/apk.yml)).
+
+**İndir:** GitHub → **Actions → APK →** son çalışma → **Artifacts → pazar-apk** (giriş gerekir, 90 gün saklanır). Zip'in içinden `pazar.apk` çıkar.
+**Yeniden derle:** Actions → APK → **Run workflow**. Render adresini kutuya yazarsan APK'ya gömülür, yazmazsan uygulama ilk açılışta sorar.
+**Kur:** Telefona at, aç, "bilinmeyen kaynaklardan kurmaya izin ver". Debug imzalıdır, Play Store için değildir.
+**Adres değiştir:** Giriş ekranındaki **⚙️ Sunucu adresi** düğmesi. Bağlantı hatasında da sorar.
+Yalnızca `https://` adreslerine bağlanır (`usesCleartextTraffic=false`).
+
 ## Oyuncu
 1. 6 karakterden birini seç (🗣️ İkna · 🎭 Blöf · 💢 Gözdağı bonusları, başlangıç altını). Adını yaz.
 2. Satıcı → eşya → teklifini kaydırıcıyla ayarla → yaklaşımı seç → **Pazarlık Et 🎲**.
