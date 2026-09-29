@@ -1,6 +1,6 @@
 # v2 Güncelleme Planı — Konuşan Portreler ve Eşya Kütüphanesi (yerel)
 
-**Hedef:** (A) Satıcı ve alıcı portreleri, yüklenen tek bir gerçekçi fantazi resminden uygulamanın kendi ürettiği **5 ağız karesiyle** konuşsun. (B) Satıcı eşyayı elle yazmak yerine görselli bir **eşya kütüphanesinden** seçsin; kütüphane **5e.tools eşya adlarını** temel alsın. (C) Satıcı **kendi eşyasını üretip satabilsin ve kendi görselini kullanabilsin**. (D) Kütüphanenin görselleri, **subagent'larla çalışan bir otomasyonla** bulunsun ya da üretilsin ve PNG'ye çevrilsin.
+**Hedef:** (A) Satıcı ve alıcı portreleri, yüklenen tek bir gerçekçi fantazi resminden uygulamanın kendi ürettiği **5 ağız karesiyle** konuşsun. (B) Satıcı eşyayı elle yazmak yerine görselli bir **eşya kütüphanesinden** seçsin; kütüphane **5e.tools eşya adlarını** temel alsın. (C) Satıcı **kendi eşyasını üretip satabilsin ve kendi görselini kullanabilsin**. (D) Kütüphanenin görselleri, **subagent'larla çalışan bir otomasyonla** bulunsun ya da üretilsin ve PNG'ye çevrilsin. (E) **Oyuncular da tezgâh açsın**, birbirine satış yapsın. (F) İleride **ayrı D&D oyuncu uygulamasıyla entegre** çalışsın.
 
 **Çerçeve (kesinleşti):**
 - **Yerel çalışır.** Sunucu DM'in bilgisayarında koşar, oyuncular aynı ağdan (Wi-Fi) bağlanır. Render ve bulut bu sürümün konusu değil.
@@ -35,10 +35,13 @@ Bu hukuki tavsiye değildir.
 | K4 | Eşya stili | ✅ Gerçekçi fantazi. Kaynaklar arası stil farkı için çerçeve ve kadraj normalizasyonu (bkz. B). |
 | K5 | Görsel biçimi | Eşya: **PNG** (saydam), 512×512 + 128×128 küçük resim. Portre: PNG sprite sayfası, kare başı 768×768, 5 kare yan yana. |
 | K6 | APK | ✅ Tünel HTTPS verdiği için APK `https://` ile çalışır (bugünkü ayar yeterli). LAN yedeği için `http://` gerekirse **cleartext izni** ayrı bir seçenek olarak eklenir. |
+| K12 | Dış oyuncu uygulaması | ✅ Ayrı bir D&D oyuncu uygulaması var, **ileride entegre çalışacak**. Bu sürümde entegrasyona hazır bir API ve kimlik/eşya modeli tasarlanır (Bölüm 8). Uygulamanın ayrıntıları henüz bilinmiyor. |
+| K13 | Oyuncu tezgâhları | ✅ Oyuncular çantalarındaki eşyayı satışa koyar. Kurallar Bölüm 7'de, ⬜ ücret ve büyülü eşya kararları DM'de. |
+| K14 | Altın ve çantanın esas kaynağı | ⬜ Dış oyuncu uygulaması mı, Pazar mı, eşitleme mi? Dış uygulama belli olunca kilitlenir (Bölüm 8). O zamana dek her değişim tek bir defterden geçer. |
 | K11 | Görsel tema | ✅ Karanlık, kirli, elle çizilmiş his: **Darkest Dungeon ağırlıklı**, Isaac'ten fiyat ve sayaç dili, mobile uyarlanmış (Bölüm 2b). İlk geçiş uygulandı. |
 | K7 | Kaynak dosyaların yeri | ⬜ DM belirler: Crooked Moon Foundry paketi mi, elle giriş mi? 5e.tools yerel kopyası nerede? |
-| K8 | Satıcının kendi eşyası | ✅ Satıcı eşya üretir, kendi görselini yükler. Eşyalar `owner` alanı taşır (ileride oyuncu tezgâhı için hazır). |
-| K9 | Görsel bulma yöntemi | ⬜ Öneri: **yerel üretim** (tutarlı gerçekçi fantazi stili) + Openverse/Wikimedia (sıradan eşyalar) + DM'in kendi görselleri. DM donanımı (GPU) ve tercihi belirler. |
+| K8 | Satıcının kendi eşyası | ✅ Satıcı eşya üretir, kendi görselini yükler. Eşyalar `owner` alanı taşır. **Oyuncular da tezgâh açar** (K13). |
+| K9 | Görsel bulma yöntemi | ✅ **RTX 2060 var** (6 GB ise sınırlı, 12 GB ise rahat; Bölüm 6). Ana yol **yerel üretim** (tutarlı gerçekçi fantazi), yardımcı: Openverse/Wikimedia (sıradan eşyalar) ve DM'in kendi görselleri. |
 | K10 | Otomasyon çatısı | ✅ Claude Code subagent'ları, DM'in makinesinde yerel çalışır. Sonuçlar DM onayından geçer. |
 
 ---
@@ -176,8 +179,8 @@ Satıcı (DM) kütüphanede olmayan ya da değiştirilmiş eşyaları kendisi ol
 - **Kendi görselin:** telefondan kamera/galeri ya da bilgisayardan dosya. Uygulama görseli kare kırpar, isteğe bağlı arka planı siler, **512 PNG + küçük resim** yapar. Görsel yoksa tür ikonu görünür.
 - **Varyant üret:** Kütüphaneden bir eşya seçip "Kopyala ve değiştir" ile (ör. *+1 Uzun Kılıç → Don Kılıcı*) yeni eşya çıkar. Kaynak `custom`, lisans "kendi" olarak kaydedilir.
 - **Satışa koy:** Üretilen eşya doğrudan satıcının rafına düşer, stok ve fiyat orada ayarlanır. Aynı eşya başka satıcıya da eklenebilir.
-- **Veri:** `owner: merchantId` alanı tutulur. İleride oyuncu da tezgâh açabilsin diye `owner` oyuncu da olabilecek şekilde tasarlanır. Bu sürümde sadece satıcılar (DM) üretir.
-- **Yetki:** Yalnızca DM üretir ve düzenler. Yüklenen dosya sunucuda yeniden kodlanır.
+- **Veri:** `owner` alanı `{ type: 'merchant' | 'player', id }` tutar. DM'in satıcıları için DM üretir. **Oyuncu tezgâhındaki üretimin kuralları Bölüm 7'de** (DM onayı, sınırlar).
+- **Yetki:** Satıcı eşyalarını yalnızca DM düzenler. Yüklenen dosya sunucuda yeniden kodlanır.
 
 **Bitiş ölçütleri:** Telefondan çekilen fotoğrafla eşya oluşturulur, pazarda, pazarlıkta ve çantada görünür. Varyant kaynağı ve fiyatı korunur. Görselsiz eşya tür ikonuyla görünür.
 
@@ -194,9 +197,17 @@ Google Görseller'i HTML olarak kazıyan araç **kurulmaz**: Google'ın şartlar
 | # | Kaynak | Ne için | Not |
 |---|---|---|---|
 | 1 | `local-folder` / `foundry-package` | DM'in kendi görselleri, Crooked Moon | Her zaman öncelikli |
-| 2 | `generate-local` | Tüm eşyalar, **tutarlı stil** | Yerel bir görüntü üretici (ör. ComfyUI/Automatic1111 API'si) çağrılır. Sabit komut şablonu: *"realistic fantasy <ad>, isolated object, studio lighting, no text"*. GPU'da eşya başı birkaç saniye. GPU yoksa yavaş ya da uygun değil (K9). |
+| 2 | `generate-local` | Tüm eşyalar, **tutarlı stil** | Yerel görüntü üretici (ComfyUI ya da Automatic1111 API'si) çağrılır. Sabit komut şablonu: *"realistic fantasy <ad>, isolated object, studio lighting, no text"*, negatif komut: yazı, filigran, çerçeve, el. RTX 2060 için ayarlar aşağıda. |
 | 3 | `openverse`, `wikimedia` | Sıradan eşyalar (ip, meşale, kılıç, zırh) | Lisans bilgisi döner (CC0 / CC-BY…), atıf manifeste yazılır. Fantazi/büyülü eşyalarda genelde sonuç yoktur. |
 | 4 | `google-cse` (isteğe bağlı) | Sadece zaten motoru olanlar | Kullanılabilirlik 2027'de biter |
+
+**RTX 2060 ile yerel üretim (K9):**
+- **Bellek:** RTX 2060'ın iki sürümü var, 6 GB ve 12 GB. **6 GB ise** SD 1.5 tabanlı bir model rahat çalışır, SDXL sınırlı ve yavaştır (düşük bellek modu gerekir). **12 GB ise** SDXL Turbo/Lightning türevleri de makul.
+- **Öneri (başlangıç):** SD 1.5 tabanlı, gerçekçi fantazi stiline yakın bir model, 512×512 üretim, ardından PNG hattında 512 px'e yerleştirme. Tutarlılık için **sabit tohum ailesi, sabit komut şablonu ve sabit bir stil ekleri** (LoRA) kullanılır.
+- **Süre (kaba tahmin, ölçülecek):** SD 1.5'te eşya başı birkaç saniye. 2.000 eşya için kabaca birkaç saat, gece çalıştırılır. SDXL'de eşya başı belirgin biçimde daha uzun. **V7'nin ilk işi 20 eşyalık bir kıyas denemesidir**, hız ve kaliteye göre model seçilir.
+- **Bellek dışı:** Arka plan silme (`rembg` benzeri) CPU'da da çalışır, GPU'yu meşgul etmez. Üretim ve işleme sırayla, tek GPU işçisiyle yapılır (paralellik 1), judge subagent'ı GPU kullanmaz.
+- **Lisans:** Seçilen modelin ve LoRA'ların lisansı kaydedilir (ticari olmayan kullanım için genelde sorun yok, yine de model kartı okunur). Çıktı `source: generated`, `license: model:<ad>` olarak yazılır.
+- **Portre üretimi:** Aynı düzenek ağız kapalı, önden bakan portreleri de üretebilir (DM'in isteğine bağlı). Yüz tutarlılığı için ayrıca bir deney yapılır. Çekirdek plana girmez.
 
 **Beklenti (dürüst):** Web kaynaklarının fantazi eşyalardaki isabeti düşüktür. Tutarlı gerçekçi fantazi görünüm için **yerel üretim ana yol**, web kaynakları sıradan eşyalar için destek olur.
 
@@ -225,15 +236,69 @@ Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yöne
 
 ---
 
-## 7. Aşamalar
+## 7. Özellik E — Oyuncu tezgâhları
+
+Oyuncular çantalarındaki eşyaları satışa koyar, başka oyuncular satın alır ya da teklif verir. Aynı teklif hattı (CRM) ve Haftalık Pazar kullanılır.
+
+**Temel akış**
+1. Oyuncu **Tezgâhım** sekmesinde tezgâhını açar (ad, kısa açıklama, portre/avatar). Çantadan eşya seçip **fiyat** koyar. Eşya listelenirken çantadan **rezerve** edilir (çift satış olmaz).
+2. Tezgâh, pazarda satıcılar gibi görünür (portresiyle, "Oyuncu tezgâhı" etiketiyle). Alıcı eşyaya dokunur:
+   - **Tam fiyata satın al** (Haftalık Pazar'da teslim), ya da
+   - **Teklif ver**: satıcı **oyuncu** cevaplar (kabul / karşı teklif / reddet), aynı Yeni → Karşı → Anlaşıldı → Teslim hattı. DM'in satıcı eşyasında verdiği kararı burada tezgâh sahibi verir.
+3. **Haftalık Pazar** (DM düğmesi) oyuncu-oyuncu anlaşmalarını da teslim eder: alıcının altını düşer, satıcıya geçer (ücret düşülmüş), eşya el değiştirir. Alıcının altını yetmezse ya da eşya artık rezervede değilse anlaşma "Teslim olmadı" olur ve rezerve serbest kalır.
+
+**Kurallar (K13)**
+| Konu | Kural | Durum |
+|---|---|---|
+| Zar ile pazarlık | **Yok.** Oyuncu tezgâhında sadece teklif hattı. (Satıcının tutumu ve Rep, DM satıcılarına özgü.) | ✅ Öneri |
+| Pazar ücreti | Her satıştan **%5** DM'in kasasına gider (altın çıkışı). DM oranı ayarlar (0–20). | ⬜ DM |
+| Büyülü eşya satışı | DM her oyuncu için açıp kapatır. Varsayılan: kapalı, DM tek tek onaylar. | ⬜ DM |
+| Kusurlu eşya | **Satılamaz** (Hard Gamble'ın 0 gp kuralı). Listelenemez. | ✅ Kural |
+| Oyuncunun ürettiği eşya | Karşı taraf görmeden önce **DM onayı**. Onaysız üretim yayınlanmaz. Üretim sınırı haftada N eşya (DM ayarlar). | ⬜ DM |
+| Fiyat sınırları | Katalogdaki eşyada fiyat etiketin %25–%400'ü arasında (aşırı fiyatla altın aktarma engeli). DM aşabilir. | ⬜ DM |
+| Kendine satış / çete | Kendi tezgâhından alamaz. Aynı iki oyuncu arasında haftalık üst sınır (DM ayarlar) ve DM'in tüm anlaşmaları görebildiği **denetim günlüğü**. | ✅ Öneri |
+| DM yetkisi | DM tezgâhı kapatabilir, bir anlaşmayı **iptal edebilir**, tüm listeleri görür. DM tezgâhları tümden kapatabilir. | ✅ |
+
+**Bitiş ölçütleri**
+- İki oyuncu arasında: listele → teklif → karşı teklif → kabul → Haftalık Pazar → eşya ve altın doğru el değiştirir, ücret düşülür. Toplam altın (oyuncular + ücret) korunur (birim testi).
+- Aynı eşya iki kez satılamaz (rezerve). Kusurlu eşya listelenemez. Yetkisiz kişi başkasının tezgâhını değiştiremez.
+- Anlaşma sırasında satıcı eşyayı çantasından çıkarmaya çalışırsa engellenir.
+- DM'in denetim günlüğünde her el değişimi görünür.
+
+---
+
+## 8. Özellik F — Dış D&D oyuncu uygulamasıyla entegrasyon (ileride)
+
+Ayrı bir D&D oyuncu uygulaması var ve ileride bu pazara bağlanacak. Bu sürümde **entegrasyonun yapılmasını değil, mümkün olmasını** sağlıyoruz. Uygulamanın teknolojisi, veri modeli ve kimlik sistemi bilinmediği için ayrıntılar aşağıdaki sorulara bağlı.
+
+**Bugünden alınacak kararlar (ucuz, sonradan pahalı):**
+- **Sürümlü kamu API'si:** Yeni uç noktalar baştan `/api/v1/...` altında. OpenAPI şeması dosyası tutulur. Mevcut iç uç noktalar sonra taşınır.
+- **Dış kimlik bağı:** Oyuncu kaydında `externalId` alanı (dış uygulamadaki karakter kimliği). Eşleme tek yönlü başlar: dış uygulama Pazar oyuncusunu **kimliğiyle** bulur.
+- **Tek doğruluk kaynağı (karar gerekir, K14):** Altın ve çanta hangi uygulamada duruyor? Seçenekler:
+  1. **Dış uygulama esas**, Pazar sadece okur/yazar (altın düş, eşya ekle) API üzerinden.
+  2. **Pazar esas**, dış uygulama Pazar'dan okur.
+  3. **Eşitleme:** ikisinde de var, olay tabanlı (satın alma, teslim) senkron.
+  Bu sürümde **altın ve eşya değişimleri tek bir yerden (bir "defter" tablosundan)** geçer, böylece entegrasyonda tek noktadan bağlanır.
+- **Olaylar (webhook):** `purchase.settled`, `offer.updated`, `stall.updated`, `gold.changed`. İmzalı, yeniden denemeli.
+- **Gömülü mod:** `?embed=1` ile üst çubuksuz açılır, dış uygulama WebView/iframe ile gömebilir. `postMessage` ile oyuncu kimliği ve tema ayarı alır.
+- **Kimlik doğrulama:** Dış uygulamadan gelen çağrılar için API anahtarı ya da kısa ömürlü JWT. PIN ve oyuncu jetonu değişmez.
+- **Veri biçimi:** Eşya ve çanta şeması, dış uygulamanın envanter alanlarına eşlenebilir olacak şekilde ad, tür, nadirlik, değer, ağırlık, kaynak alanlarını içerir.
+
+**Bitiş ölçütleri (bu sürümde):** OpenAPI dosyası ve `/api/v1` altında oyuncu, çanta, altın, eşya, teklif uç noktaları. Tüm altın/eşya değişimleri deftere yazılır. Webhook gönderimi bir sahte alıcıya karşı testte doğrulanır. Gerçek entegrasyon dış uygulama belli olunca ayrı bir aşamadır.
+
+---
+
+## 9. Aşamalar
 
 | Sürüm | Aşama | İş | Boyut |
 |---|---|---|---|
-| — | **V0** Karar kilidi | K7 ve K9: kaynak dosyalar nerede, GPU var mı, hangi üretici? Tünel türü? | S |
+| — | **V0** Karar kilidi | K7 (kaynak dosyalar nerede), RTX 2060 belleği (6/12 GB), tünel türü, K13 tezgâh kuralları, dış uygulamanın ayrıntıları (K12/K14) | S |
 | ✅ | **V0b** Tema, ilk geçiş | Karanlık tema, portre penceresi, raf, çanta ızgarası, filtreler, simgeli çubuk (Bölüm 2b) | M |
 | v1.1 | **V1** Yerel çalıştırma ve uzaktan erişim | `npm run tunnel` (Cloudflare Tunnel), davet bağlantısı ve QR, PIN hız sınırı, yedek betiği, başlatma betikleri, LAN yedeği | M |
 | v1.1 | **V2** Medya katmanı | `/api/media` yükleme (boyut, tür, yeniden kodlama, kare kırpma), yerel disk, `/media` sunumu, önbellek, testler | M |
+| v1.1 | **V2b** Defter ve `/api/v1` | Altın/eşya değişimlerinin tek defterden geçmesi, `/api/v1` ve OpenAPI, `externalId`, webhook altyapısı (Bölüm 8) | M |
 | v1.1 | **V3** Satıcı eşya üretimi | Eşya editörü, **kendi görseli** (kamera/galeri), varyant üret, `owner` alanı, tür ikonları, rarite çerçeveleri | M |
+| v1.1 | **V3b** Oyuncu tezgâhı | Tezgâh, rezerve, oyuncu-oyuncu teklif hattı, Haftalık Pazar'da oyuncu teslimi, ücret, DM denetim günlüğü ve kısıtlar, onay kuyruğu, defter tablosu | L |
 | v1.1 | **V4** Portre + ağız kareleri | Yükleme, yüz işareti + ağ deformasyonu, ağız içi dokuları, yedek 2 dokunuş yolu, önizleme ve ince ayar, sprite kaydı | L |
 | v1.1 | **V5** Konuşma animasyonu | Baloncuk metni → kare eşlemesi, satıcı ve alıcı portreleri, ruh hâlleri, oyuncu avatarı | M |
 | v1.2 | **V6** Kütüphane çekirdeği ve 5e.tools verisi | Veri modeli, `open` kaynağı, `local-5etools` **ad ve veri** aktarımı, ad eşleştirme, "Hakkında" ve lisans ekranı, depo denetimi | L |
@@ -241,9 +306,10 @@ Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yöne
 | v1.2 | **V8** DM seçici, onay ekranı, şablonlar | Kütüphane ızgarası, süzgeç, otomatik doldurma, **görsel onay kuyruğu**, dükkân şablonları | L |
 | v2.0 | **V9** Crooked Moon | 26 eşyanın içe aktarımı ya da elle girişi, ekran doğrulaması | S |
 | v2.0 | **V10** APK ve sürüm | `versionCode 2`, görsel önbelleği, cihazda test | M |
-| v2.x | **V11** Bildirimler (isteğe bağlı) | DM cevap verince oyuncuya bildirim (Web Push / APK yerel bildirim) | M |
+| v2.x | **V11** Bildirimler (isteğe bağlı) | DM ya da tezgâh sahibi cevap verince bildirim (Web Push / APK yerel bildirim) | M |
+| v2.x | **V12** Dış uygulama entegrasyonu | Dış oyuncu uygulamasına bağlanma (K12, K14 kararına göre): eşleme, olay akışı, gömülü mod | L |
 
-**Sıra:** V1–V2 tüm özelliklerin temeli. **V3 (satıcı kendi eşyası ve görseli) medya katmanından hemen sonra gelir**, çünkü kütüphane ve otomasyon olmadan da işe yarar. Portre (V4–V5) ve kütüphane (V6–V8) birbirinden bağımsız ilerleyebilir. Otomasyon (V7) V6'nın ad kuyruğuna ve V2'nin medya katmanına dayanır.
+**Sıra:** V1–V2b tüm özelliklerin temeli (erişim, medya, **defter ve `/api/v1`**). **V3 (satıcı kendi eşyası ve görseli) ve V3b (oyuncu tezgâhı)** medya ve defter katmanından hemen sonra gelir, çünkü kütüphane ve otomasyon olmadan da işe yarar. Portre (V4–V5) ve kütüphane (V6–V8) birbirinden bağımsız ilerleyebilir. Otomasyon (V7) V6'nın ad kuyruğuna ve V2'nin medya katmanına dayanır, **ilk işi 20 eşyalık kıyas denemesidir** (RTX 2060 ile model seçimi). Dış uygulama entegrasyonu (V12) ancak K12/K14 netleşince başlar.
 
 ### Genel testler
 - Birim: viseme eşlemesi, slug ve eşleştirme, rarite fiyat tablosu, medya doğrulaması.
@@ -253,7 +319,7 @@ Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yöne
 
 ---
 
-## 8. Riskler
+## 10. Riskler
 
 | Risk | Etki | Önlem |
 |---|---|---|
@@ -264,6 +330,10 @@ Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yöne
 | DM'in bilgisayarı kapalıyken pazar yok | Oturum dışı erişim yok | Beklenen davranış (yerel), gerekirse tünel |
 | Foundry paket yapısı beklenenden farklı | İçe aktarma çalışmaz | `local-folder` ve `manual` yedekleri, V0'da doğrulama |
 | Tünel adresi değişir, herkese açık bir adres | Oyuncu bağlanamaz, yetkisiz DM denemesi | Davet bağlantısı yenileme, PIN hız sınırı ve güçlü PIN, gerekirse adlandırılmış tünel |
+| Oyuncular arasında altın aktarımıyla sömürü (çete, sahte fiyat) | Oyun dengesi bozulur | Ücret, fiyat sınırları, haftalık çift sınırı, denetim günlüğü, DM iptali |
+| Rezerve ve teslim yarışması (eşya iki kez satılır) | Kayıp eşya/altın | Rezerve, tek defter, teslimde yeniden doğrulama, işlem tekrarına dayanıklılık, birim testleri |
+| Dış uygulamanın modeli bilinmiyor | Sonradan uyumsuzluk | Sürümlü API, defter, `externalId`, K14 kararını erkene almak |
+| RTX 2060 6 GB ile SDXL yavaş/yetersiz | Üretim süresi uzar | SD 1.5 ile başla, 20 eşyalık kıyas denemesi, gece çalıştırma |
 | DM'in bilgisayarı kapalı | Teklif bırakılamaz | Bilinen sınır. Çözüm: hep-açık mini PC ya da bulut |
 | Kaynaklar arası stil farkı | Tutarsız görünüm | Kadraj normalizasyonu, rarite çerçevesi, gölge, yerel üretimi ana yol yapmak |
 | Web görsellerinde düşük isabet (fantazi eşyalar) | Yanlış ya da kalitesiz görsel | Judge subagent'ı, DM onayı, üretime düşme |
@@ -274,10 +344,11 @@ Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yöne
 
 ---
 
-## 9. Açık sorular (DM)
-1. **Görsel üretimi:** Bilgisayarınızda GPU'lu bir ekran kartı var mı? Yerel üretimi ana yol yapıp yapamayacağımızı bu belirler. Yoksa hangi yolu tercih edersiniz (yalnız Openverse ve kendi görselleriniz, ücretli bir görüntü üretme servisi)?
+## 11. Açık sorular (DM)
+1. **RTX 2060 kaç GB?** 6 GB mı 12 GB mı? ComfyUI ya da Automatic1111 kurulu mu? (Model seçimi ve üretim süresi buna göre değişir.)
 2. **5e.tools verisi:** Yerelde `items.json` gibi bir kopyanız var mı? Yoksa siteden kendiniz indirip bir klasöre koyabilir misiniz?
-3. **Satıcı üretimi:** Sadece DM üretsin mi, yoksa oyuncular da tezgâh açsın mı? (Tasarım ikisine de hazır, bu sürümde sadece DM.)
+3. **Oyuncu tezgâhı kuralları:** Pazar ücreti %5 uygun mu? Büyülü eşya satışı varsayılan kapalı (DM onayıyla) mı olsun? Oyuncunun ürettiği eşya için DM onayı şart mı? Fiyat sınırı %25–%400 makul mü?
 4. **Crooked Moon nereden?** Foundry'de kurulu paketiniz var mı, yoksa PDF/D&D Beyond mi? (PDF ise 26 eşya için elle giriş en kısa yol.)
 5. **Portreler:** Elinizde hazır gerçekçi fantazi portreler var mı, yoksa kendiniz mi üreteceksiniz? Ağız kapalı, önden bakan çekimlere ihtiyaç var.
 6. **Erişim:** Cloudflare Tunnel (oyuncuya kurulum yok, adres değişebilir) mi, Tailscale (herkes kurar, kalıcı adres) mi tercih edersiniz? DM'in bilgisayarı oyun dışında açık kalabilir mi?
+7. **Dış oyuncu uygulaması:** Hangisi (ad, web/mobil, kendi geliştirdiğiniz mi)? Karakterin altını ve çantasını orada mı tutuyor? Kimlik doğrulaması nasıl (hesap, oda kodu)? API'si ya da veri dışa aktarımı var mı? (K14: altın ve çantanın esas kaynağı hangisi olsun?)

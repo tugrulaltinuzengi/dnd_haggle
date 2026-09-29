@@ -43,3 +43,5 @@ Formül f = X − a·u/2 · DC 12 / 15 / 18 · Rep 4 / 3 / 2 · Y < X/4 zarsız 
 
 ## v2 (sonraki sürüm, yerel)
 Konuşan portreler (5 ağız karesi, gerçekçi fantazi) ve görselli eşya kütüphanesi: [PLAN_V2.md](PLAN_V2.md). Sunucu DM'in bilgisayarında koşar (LAN), ticari değil. The Crooked Moon lisanslı. Telifli görsel, kitap metni ve 5e.tools verisi herkese açık depoya girmez, yerel klasörlerde kalır. Oyuncular aynı odada olmak zorunda değil (CRM gibi, eşzamansız): uzaktan erişim için Cloudflare Tunnel önerilir. Karanlık tema (Darkest Dungeon ağırlıklı) ilk geçişle uygulandı. Render/APK yayın adımları (Aşama 5) yerel çalışma tercih edildiği için beklemede.
+
+Güncel kararlar: RTX 2060 ile yerel görsel üretimi (SD 1.5 ile başla, 20 eşyalık kıyas), oyuncular da tezgâh açar (oyuncu-oyuncu teklif hattı, %5 pazar ücreti önerisi, DM denetimi), ayrı bir D&D oyuncu uygulamasıyla ileride entegrasyon için sürümlü `/api/v1`, tek defter ve olay (webhook) altyapısı.
