@@ -551,6 +551,7 @@ async function api(req, res, url) {
     return broadcast();
   }
   if (req.method === 'GET' && name === 'chars') return send(res, 200, CHARS);
+  if (req.method === 'GET' && name === 'limits') return send(res, 200, { item: MEDIA_LIMITS.item, thumb: MEDIA_LIMITS.thumb, portrait: MEDIA_LIMITS.portrait });
   if (req.method === 'GET' && (name === 'address' || name === 'ledger.csv')) {
     const a = auth(req.headers['x-token']);
     if (!a || a.role !== 'dm') return send(res, 403, { error: 'Yalnızca DM' });

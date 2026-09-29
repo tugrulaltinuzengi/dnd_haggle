@@ -16,7 +16,7 @@ let cfgDraft = null, edit = null; // DM: yakınlık ayarı taslağı, eşya edit
 
 function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2500); }
 async function api(path, body) {
-  const r = await fetch('/api/' + path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': (auth && auth.token) || '' }, body: JSON.stringify(body || {}) });
+  const r = await fetch('/api/' + path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': (auth && auth.token) || '', 'x-now': String(Date.now()) }, body: JSON.stringify(body || {}) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { toast(j.error || 'Hata'); throw new Error(j.error); }
   return j;
@@ -51,13 +51,19 @@ async function putMedia(kind, id, variant, blob) {
 async function uploadImage(kind, id, file) {
   toast('Görsel hazırlanıyor');
   try {
+    // sunucunun kabul ettiği boyutlar (ESP'de küçük, PC'de büyük); bilinmiyorsa eski varsayılanlar
+    const lim = await fetch('/api/limits').then((r) => r.json()).catch(() => ({ item: 700 * 1024, thumb: 60 * 1024, portrait: 400 * 1024 }));
     if (kind === 'item') {
       let blob;
-      for (const sz of [512, 384, 256]) { blob = await fitBlob(file, sz, sz, 'image/png'); if (blob.size <= 700 * 1024) break; } // PNG çok büyükse küçült
+      for (const sz of [512, 384, 256, 192, 128]) { blob = await fitBlob(file, sz, sz, 'image/png'); if (blob.size <= lim.item) break; } // PNG çok büyükse küçült
       await putMedia('item', id, 'main', blob);
-      await putMedia('item', id, 'thumb', await fitBlob(file, 128, 128, 'image/png'));
+      let th;
+      for (const sz of [128, 96, 64]) { th = await fitBlob(file, sz, sz, 'image/png'); if (th.size <= lim.thumb) break; }
+      await putMedia('item', id, 'thumb', th);
     } else {
-      await putMedia('portrait', id, 'main', await fitBlob(file, 768, 512, 'image/jpeg', 0.85));
+      let blob;
+      for (const [w, h, q] of [[768, 512, 0.85], [576, 384, 0.8], [384, 256, 0.75], [288, 192, 0.7]]) { blob = await fitBlob(file, w, h, 'image/jpeg', q); if (blob.size <= lim.portrait) break; }
+      await putMedia('portrait', id, 'main', blob);
     }
     toast('Görsel yüklendi');
   } catch (e) { if (!e || !e.shown) toast('Görsel yüklenemedi'); }
