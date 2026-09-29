@@ -142,7 +142,7 @@ static String ledgerCsv() {
 // ---------- JSON actions ----------
 static void handleAction(AsyncWebServerRequest* r, const String& name, const uint8_t* data, size_t len) {
   JsonDocument bdoc;
-  if (len) { if (deserializeJson(bdoc, data, len)) { sendErr(r, 400, "Geçersiz JSON"); return; } }
+  if (len) { if (deserializeJson(bdoc, data, len)) { sendErr(r, 400, "Invalid JSON"); return; } }
   JsonObject b = bdoc.as<JsonObject>();
   if (b.isNull()) b = bdoc.to<JsonObject>();
   try {
@@ -150,7 +150,7 @@ static void handleAction(AsyncWebServerRequest* r, const String& name, const uin
     if (name == "join") {
       String nm = textOf(b["name"], 16);
       JsonObject ch = charOf(b["charId"] | "");
-      if (ch.isNull()) fail("Karakter seç.");
+      if (ch.isNull()) fail("Choose a character.");
       JsonObject p;
       String low = nm; low.toLowerCase();
       for (JsonObject x : S["players"].as<JsonArray>()) { String n2 = x["name"].as<const char*>(); n2.toLowerCase(); if (n2 == low) { p = x; break; } }
@@ -168,8 +168,8 @@ static void handleAction(AsyncWebServerRequest* r, const String& name, const uin
     }
     if (name == "dm/login") {
       uint32_t ip = r->client()->remoteIP();
-      if (pinLocked(ip)) fail("Çok fazla deneme. Bir süre bekle.", 429);
-      if (!checkDmPass(strOf(b["pin"]))) { pinFailed(ip); fail("Yanlış PIN", 403); }
+      if (pinLocked(ip)) fail("Too many attempts. Wait a while.", 429);
+      if (!checkDmPass(strOf(b["pin"]))) { pinFailed(ip); fail("Wrong PIN", 403); }
       pinOk(ip);
       String t = newToken();
       JsonArray dm = S["dm"].as<JsonArray>(); dm.add(t);
@@ -180,13 +180,13 @@ static void handleAction(AsyncWebServerRequest* r, const String& name, const uin
       return;
     }
     Auth a = authOf(hdr(r, "x-token").c_str());
-    if (a.role == Auth::NONE) fail("Giriş gerekli", 401);
+    if (a.role == Auth::NONE) fail("Login required", 401);
     JsonDocument outDoc; JsonObject out = outDoc.to<JsonObject>();
     if (name.startsWith("dm/")) {
-      if (a.role != Auth::DM) fail("Yalnızca DM", 403);
+      if (a.role != Auth::DM) fail("DM only", 403);
       runDm(name.substring(3), b, a, out);
     } else {
-      if (a.role != Auth::PLAYER) fail("Yalnızca oyuncu", 403);
+      if (a.role != Auth::PLAYER) fail("Player only", 403);
       runPlayer(name, a.player, b);
     }
     changed();
@@ -197,8 +197,8 @@ static void handleAction(AsyncWebServerRequest* r, const String& name, const uin
     sendErr(r, e.code, e.what());
   } catch (const std::runtime_error& e) {
     String m = e.what();
-    if (m.startsWith("Teklif") || m.startsWith("Bu pazarlık") || m.startsWith("Bilinmeyen")) sendErr(r, 400, e.what());
-    else { Serial.printf("500: %s\n", e.what()); sendErr(r, 500, "Sunucu hatası"); }
+    if (m.startsWith("Offer") || m.startsWith("This negotiation") || m.startsWith("Unknown")) sendErr(r, 400, e.what());
+    else { Serial.printf("500: %s\n", e.what()); sendErr(r, 500, "Server error"); }
   }
 }
 
@@ -216,7 +216,7 @@ static void handleAll(AsyncWebServerRequest* r) {
       const AsyncWebParameter* tp = r->getParam("token");
       Auth a;
       { Lock l; a = authOf(tp ? tp->value().c_str() : ""); }
-      if (a.role == Auth::NONE) { sendErr(r, 401, "Giriş gerekli"); return; }
+      if (a.role == Auth::NONE) { sendErr(r, 401, "Login required"); return; }
       if (sseCount() >= MAX_SSE || ESP.getFreeHeap() < MIN_FREE_HEAP) { sendErr(r, 503, "Kapasite dolu"); return; }
       Slot* s = slotFor(a.role == Auth::DM ? String("dm") : String(a.player["id"].as<const char*>()));
       if (!s) { sendErr(r, 503, "Kapasite dolu"); return; }
@@ -229,12 +229,12 @@ static void handleAll(AsyncWebServerRequest* r) {
     }
     if (get && name == "limits") { sendJson(r, 200, "{\"item\":122880,\"thumb\":61440,\"portrait\":122880}"); return; }
     if (get && name == "chars") {
-      if (!LittleFS.exists("/www/chars.json")) { sendErr(r, 500, "Sunucu hatası"); return; }
+      if (!LittleFS.exists("/www/chars.json")) { sendErr(r, 500, "Server error"); return; }
       r->send(LittleFS, "/www/chars.json", "application/json; charset=utf-8"); return;
     }
     if (get && (name == "address" || name == "ledger.csv")) {
       Auth a; { Lock l; a = authOf(hdr(r, "x-token").c_str()); }
-      if (a.role != Auth::DM) { sendErr(r, 403, "Yalnızca DM"); return; }
+      if (a.role != Auth::DM) { sendErr(r, 403, "DM only"); return; }
       if (name == "address") { sendJson(r, 200, "{\"url\":\"http://192.168.4.1\"}"); return; }
       String csv; { Lock l; csv = ledgerCsv(); }
       AsyncWebServerResponse* res = r->beginResponse(200, "text/csv; charset=utf-8", csv);
@@ -244,11 +244,11 @@ static void handleAll(AsyncWebServerRequest* r) {
     if (post && name == "media") {
       try {
         Auth a; { Lock l; a = authOf(hdr(r, "x-token").c_str()); }
-        if (a.role != Auth::DM) { sendErr(r, 403, "Yalnızca DM"); return; }
+        if (a.role != Auth::DM) { sendErr(r, 403, "DM only"); return; }
         Lock l;
         auto prm = [&](const char* k) -> const char* { const AsyncWebParameter* p = r->getParam(k); return p ? p->value().c_str() : nullptr; };
         MediaJob j = mediaPrecheck(prm("kind"), prm("id"), prm("variant"));
-        if (!bd || bd->state != 1) fail("Boş dosya");     // no body arrived, so nothing was opened
+        if (!bd || bd->state != 1) fail("Empty file");     // no body arrived, so nothing was opened
         String reply = mediaFinish(j);
         changed();
         sendJson(r, 200, reply);
@@ -279,7 +279,7 @@ static void handleBody(AsyncWebServerRequest* r, uint8_t* data, size_t len, size
     size_t keep = isMedia ? 0 : total;
     if (!isMedia && total > BODY_MAX) {
       Body* b = (Body*)calloc(1, sizeof(Body)); b->state = 2; r->_tempObject = b;
-      sendErr(r, 413, "Çok büyük"); return;
+      sendErr(r, 413, "Too large"); return;
     }
     Body* b = (Body*)calloc(1, sizeof(Body) + keep + 1);
     if (!b) { sendErr(r, 503, "Kapasite dolu"); return; }
@@ -287,12 +287,12 @@ static void handleBody(AsyncWebServerRequest* r, uint8_t* data, size_t len, size
     if (isMedia) {
       try {
         Auth a; { Lock l; a = authOf(hdr(r, "x-token").c_str()); }
-        if (a.role != Auth::DM) fail("Yalnızca DM", 403);
+        if (a.role != Auth::DM) fail("DM only", 403);
         auto prm = [&](const char* k) -> const char* { const AsyncWebParameter* p = r->getParam(k); return p ? p->value().c_str() : nullptr; };
         Lock l;
         MediaJob j = mediaPrecheck(prm("kind"), prm("id"), prm("variant"));
-        if (total > j.cap) fail("Dosya çok büyük", 413);
-        if (ESP.getFreeHeap() < MIN_FREE_HEAP || !mediaOpen()) fail("Meşgul, tekrar dene", 503);
+        if (total > j.cap) fail("File too large", 413);
+        if (ESP.getFreeHeap() < MIN_FREE_HEAP || !mediaOpen()) fail("Busy, try again", 503);
         b->state = 1;
       } catch (const HttpError& e) { b->state = 2; sendErr(r, e.code, e.what()); return; }
     }

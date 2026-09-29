@@ -12,7 +12,7 @@ Lock::~Lock() { xSemaphoreGiveRecursive(mtx); }
 static volatile bool saveDue = false, bcastDue = false;
 static uint32_t saveAt = 0, lastBcast = 0;
 
-const char* const LEVEL_NAMES[5] = {"Yabancı", "Tanıdık", "Müşteri", "Dost", "Sırdaş"};
+const char* const LEVEL_NAMES[5] = {"Stranger", "Acquaintance", "Customer", "Friend", "Confidant"};
 
 // ---------- persistence ----------
 static const char* DATA = "/data.json";
@@ -24,13 +24,13 @@ void seedWorld() {
   S["offers"].to<JsonArray>();
   JsonArray m = S["merchants"].to<JsonArray>();
   struct { const char* id; const char* name; const char* emoji; const char* type; } ms[] = {
-    {"m1", "Bora", "🧓", "comert"}, {"m2", "Marla", "👩‍🔧", "notr"}, {"m3", "Grom", "🐗", "acgozlu"}};
+    {"m1", "Bora", "🧓", "generous"}, {"m2", "Marla", "👩‍🔧", "neutral"}, {"m3", "Grom", "🐗", "greedy"}};
   for (auto& x : ms) { JsonObject o = m.add<JsonObject>(); o["id"] = x.id; o["name"] = x.name; o["emoji"] = x.emoji; o["type"] = x.type; }
   JsonArray it = S["items"].to<JsonArray>();
   struct { const char* mid; const char* name; double price; bool magical; int stock; } is[] = {
-    {"m1", "İyileştirme İksiri", 50, false, -1}, {"m1", "İp (15 m)", 1, false, -1}, {"m1", "Çadır", 2, false, -1},
-    {"m2", "Uzun Kılıç", 15, false, -1}, {"m2", "Zincir Zırh", 75, false, -1}, {"m2", "Hırsız Aletleri", 25, false, -1},
-    {"m3", "Uçuş İksiri", 250, true, 2}, {"m3", "+1 Kalkan", 400, true, 1}, {"m3", "Ejder Pulu", 120, false, -1}};
+    {"m1", "Potion of Healing", 50, false, -1}, {"m1", "Hempen Rope (50 ft)", 1, false, -1}, {"m1", "Tent", 2, false, -1},
+    {"m2", "Longsword", 15, false, -1}, {"m2", "Chain Mail", 75, false, -1}, {"m2", "Thieves' Tools", 25, false, -1},
+    {"m3", "Potion of Flying", 250, true, 2}, {"m3", "+1 Shield", 400, true, 1}, {"m3", "Dragon Scale", 120, false, -1}};
   for (auto& x : is) {
     JsonObject o = it.add<JsonObject>();
     o["id"] = newId(); o["merchantId"] = x.mid; o["name"] = x.name; o["price"] = x.price; o["magical"] = x.magical;
@@ -144,9 +144,9 @@ void book(const char* kind, JsonObject p, const char* merchantId, const String& 
 }
 
 // ---------- lookups ----------
-JsonObject merchantOf(const char* id) { JsonObject o = findBy(S["merchants"], "id", id); if (o.isNull()) fail("Satıcı yok", 404); return o; }
-JsonObject itemOf(const char* id) { JsonObject o = findBy(S["items"], "id", id); if (o.isNull()) fail("Eşya yok", 404); return o; }
-JsonObject playerOf(const char* id) { JsonObject o = findBy(S["players"], "id", id); if (o.isNull()) fail("Oyuncu yok", 404); return o; }
+JsonObject merchantOf(const char* id) { JsonObject o = findBy(S["merchants"], "id", id); if (o.isNull()) fail("No such merchant", 404); return o; }
+JsonObject itemOf(const char* id) { JsonObject o = findBy(S["items"], "id", id); if (o.isNull()) fail("No such item", 404); return o; }
+JsonObject playerOf(const char* id) { JsonObject o = findBy(S["players"], "id", id); if (o.isNull()) fail("No such player", 404); return o; }
 JsonObject charOf(const char* id) { return findBy(CHARS.as<JsonArray>(), "id", id); }
 String nkey(const char* pid, const char* iid) { return String(pid) + ":" + iid; }
 String bkey(const char* pid, const char* mid) { return String(pid) + ":" + mid; }
@@ -154,7 +154,7 @@ bool isBanned(const char* pid, const char* mid) { JsonVariant v = S["bans"][bkey
 
 // ---------- affinity ----------
 AffCfg affCfg() {
-  AffCfg c = {true, 20, 10, {20, 40, 60, 80}, {0, 0, -1, -2, -3}, 3, 2, 5, 1, -2, -1, -5};
+  AffCfg c = {true, 20, 10, {20, 40, 60, 80}, {0, 0, -1, -2, -3}, 3, 2, 5, 1, -1, -5};
   JsonObjectConst o = S["settings"]["affinity"];
   if (o.isNull()) return c;
   if (o["enabled"].is<bool>()) c.enabled = o["enabled"];
@@ -167,7 +167,6 @@ AffCfg affCfg() {
   if (g["buy"].is<int>()) c.gainBuy = g["buy"];
   if (g["offer"].is<int>()) c.gainOffer = g["offer"];
   if (g["deal"].is<int>()) c.gainDeal = g["deal"];
-  if (g["gamble"].is<int>()) c.gainGamble = g["gamble"];
   if (g["ret"].is<int>()) c.gainRet = g["ret"];
   if (g["angered"].is<int>()) c.gainAngered = g["angered"];
   return c;
@@ -197,6 +196,6 @@ void affChange(JsonObject p, const char* mid, int delta, const char* why) {
   if (next == cur) return;
   S["affinity"][k] = next;
   JsonObject m = findBy(S["merchants"], "id", mid);
-  String txt = String(p["name"].as<const char*>()) + " ↔ " + (m.isNull() ? "?" : m["name"].as<const char*>()) + ": yakınlık " + (next > cur ? "+" : "") + String(next - cur) + " (" + why + ")";
+  String txt = String(p["name"].as<const char*>()) + " ↔ " + (m.isNull() ? "?" : m["name"].as<const char*>()) + ": affinity " + (next > cur ? "+" : "") + String(next - cur) + " (" + why + ")";
   logLine(txt, pid);
 }

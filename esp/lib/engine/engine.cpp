@@ -4,14 +4,14 @@
 
 namespace eng {
 
-static const Type T_COMERT{0.5, 12, 4, "C\xC3\xB6mert"};
-static const Type T_NOTR{1.0, 15, 3, "N\xC3\xB6tr"};
-static const Type T_ACGOZLU{1.5, 18, 2, "A\xC3\xA7g\xC3\xB6zl\xC3\xBC"};
+static const Type T_GENEROUS{0.5, 12, 4, "Generous"};
+static const Type T_NEUTRAL{1.0, 15, 3, "Neutral"};
+static const Type T_GREEDY{1.5, 18, 2, "Greedy"};
 
 const Type* typeOf(const std::string& id) {
-  if (id == "comert") return &T_COMERT;
-  if (id == "notr") return &T_NOTR;
-  if (id == "acgozlu") return &T_ACGOZLU;
+  if (id == "generous") return &T_GENEROUS;
+  if (id == "neutral") return &T_NEUTRAL;
+  if (id == "greedy") return &T_GREEDY;
   return nullptr;
 }
 bool validApproach(const std::string& a) { return a == "persuasion" || a == "deception" || a == "intimidation"; }
@@ -28,11 +28,11 @@ Neg newNegotiation(double itemPrice, const std::string& type, int bonusRep) {
 
 Entry haggle(Neg& neg, const HaggleIn& in) {
   const Type* T = typeOf(in.type);
-  if (!T) throw std::runtime_error("Bilinmeyen sat\xC4\xB1" "c\xC4\xB1 tipi");
+  if (!T) throw std::runtime_error("Unknown merchant type");
   const int dc = T->dc + in.dcMod;
-  if (!validApproach(in.approach)) throw std::runtime_error("Bilinmeyen yakla\xC5\x9F\xC4\xB1m");
-  if (neg.status != "open") throw std::runtime_error("Bu pazarl\xC4\xB1k bitti.");
-  if (!(in.Y > 0) || in.Y >= in.X) throw std::runtime_error("Teklif etiket fiyat\xC4\xB1n\xC4\xB1n alt\xC4\xB1nda olmal\xC4\xB1.");
+  if (!validApproach(in.approach)) throw std::runtime_error("Unknown approach");
+  if (neg.status != "open") throw std::runtime_error("This negotiation is over.");
+  if (!(in.Y > 0) || in.Y >= in.X) throw std::runtime_error("Offer must be below the list price.");
 
   const double X = in.X, Y = in.Y;
   Entry e;

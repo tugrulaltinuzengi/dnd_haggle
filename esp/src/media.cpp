@@ -37,7 +37,7 @@ const char* mediaMime(const String& p) { return p.endsWith(".png") ? "image/png"
 MediaJob mediaPrecheck(const char* kind, const char* id, const char* variant) {
   MediaJob j;
   String k = kind ? kind : "";
-  if (k != "item" && k != "portrait") fail("Tür geçersiz");
+  if (k != "item" && k != "portrait") fail("Invalid kind");
   j.kind = k; j.variant = (variant && !strcmp(variant, "thumb")) ? "thumb" : "main";
   if (k == "item") itemOf(id); else merchantOf(id);   // 404 when unknown
   j.id = id; j.sub = k == "item" ? "items" : "portraits";
@@ -104,12 +104,12 @@ String mediaFinish(const MediaJob& j) {
   size_t size = upGot;
   if (up) up.close();
   struct Guard { ~Guard() { LittleFS.remove(UP); busy = false; } } guard;   // temp file is always cleaned (renamed files no longer exist)
-  if (!size) fail("Boş dosya");
+  if (!size) fail("Empty file");
   File f = LittleFS.open(UP, "r");
   Info info = sniff(f, size);
   f.close();
-  if (!info.ok) fail("Yalnızca PNG veya JPEG kabul edilir.");
-  if (info.w < MIN_PX || info.h < MIN_PX || info.w > MAX_PX || info.h > MAX_PX) fail("Görsel 32–2048 px olmalı.");
+  if (!info.ok) fail("Only PNG or JPEG is accepted.");
+  if (info.w < MIN_PX || info.h < MIN_PX || info.w > MAX_PX || info.h > MAX_PX) fail("Image must be 32–2048 px.");
 
   String dir = "/media/" + j.sub;
   String base = j.id + (j.variant == "thumb" ? ".t" : "");

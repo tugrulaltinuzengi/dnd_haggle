@@ -71,7 +71,7 @@ double numOf(JsonVariantConst v, double min) {
   else if (v.is<bool>()) n = v.as<bool>() ? 1 : 0;
   else if (v.is<const char*>()) { const char* p = v.as<const char*>(); char* end; double d = strtod(p, &end); if (end != p && !*end) n = d; }
   n = floor(n * 100.0 + 0.5) / 100.0;
-  if (!isfinite(n) || n < min) fail("Geçersiz sayı");
+  if (!isfinite(n) || n < min) fail("Invalid number");
   return n;
 }
 String strOf(JsonVariantConst v) {
@@ -82,7 +82,7 @@ String strOf(JsonVariantConst v) {
 String textStr(const String& in, size_t max) {
   String s = jsSlice(jsTrim(in), max);
   s = jsTrim(s);
-  if (!s.length()) fail("Boş olamaz");
+  if (!s.length()) fail("Cannot be empty");
   return s;
 }
 String textOf(JsonVariantConst v, size_t max) {

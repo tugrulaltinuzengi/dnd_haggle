@@ -40,7 +40,8 @@ try {
 
   Push-Location $app
   $env:BASE = 'http://192.168.4.1'; $env:DM_PIN = $cfg['DM_PIN']; $env:PIN_LOCK_MS = '1500'
-  node --test test/http/parity.test.js *>&1 | Tee-Object -FilePath $out
+  $env:NO_COLOR = '1'
+  node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=$out test/http/parity.test.js
   Pop-Location
 }
 finally {

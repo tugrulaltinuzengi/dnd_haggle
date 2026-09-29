@@ -30,7 +30,7 @@ static void affJson(String& out, const AffCfg& c) {
   JsonArray dc = d["dcMod"].to<JsonArray>(); for (int i = 0; i < 5; i++) dc.add(c.dcMod[i]);
   d["bonusRepFrom"] = c.bonusRepFrom;
   JsonObject g = d["gain"].to<JsonObject>();
-  g["buy"] = c.gainBuy; g["offer"] = c.gainOffer; g["deal"] = c.gainDeal; g["gamble"] = c.gainGamble; g["ret"] = c.gainRet; g["angered"] = c.gainAngered;
+  g["buy"] = c.gainBuy; g["offer"] = c.gainOffer; g["deal"] = c.gainDeal; g["ret"] = c.gainRet; g["angered"] = c.gainAngered;
   serializeJson(d, out);
 }
 
@@ -152,8 +152,8 @@ String dmViewJson() {
     out += ",\"affinity\":"; serializeJson(d, out);
   }
   out += ",\"settings\":{\"affinity\":"; affJson(out, cfg);
-  out += ",\"defaults\":"; affJson(out, AffCfg{true, 20, 10, {20, 40, 60, 80}, {0, 0, -1, -2, -3}, 3, 2, 5, 1, -2, -1, -5});
-  out += ",\"levelNames\":[\"Yabancı\",\"Tanıdık\",\"Müşteri\",\"Dost\",\"Sırdaş\"]}";
+  out += ",\"defaults\":"; affJson(out, AffCfg{true, 20, 10, {20, 40, 60, 80}, {0, 0, -1, -2, -3}, 3, 2, 5, 1, -1, -5});
+  out += ",\"levelNames\":[\"Stranger\",\"Acquaintance\",\"Customer\",\"Friend\",\"Confidant\"]}";
   {
     out += ",\"chars\":[";
     bool first = true;

@@ -35,7 +35,7 @@ bool isBanned(const char* pid, const char* mid);
 // ---- affinity ----
 struct AffCfg {
   bool enabled; int start, weeklyCap; int thresholds[4]; int dcMod[5]; int bonusRepFrom;
-  int gainBuy, gainOffer, gainDeal, gainGamble, gainRet, gainAngered;
+  int gainBuy, gainOffer, gainDeal, gainRet, gainAngered;
 };
 extern const char* const LEVEL_NAMES[5];
 AffCfg affCfg();

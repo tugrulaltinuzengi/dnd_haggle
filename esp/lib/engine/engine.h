@@ -1,5 +1,5 @@
 #pragma once
-// 1:1 port of app/engine.js (pazarlik kurallari). No Arduino deps.
+// 1:1 port of app/engine.js (haggling rules). No Arduino deps.
 #include <string>
 #include <vector>
 #include <stdexcept>
@@ -10,7 +10,7 @@ struct Type { double u; int dc; int rep; const char* name; };
 const Type* typeOf(const std::string& id);  // nullptr if unknown
 bool validApproach(const std::string& a);
 
-constexpr double MIN_RATIO = 0.25, ANGER_MARKUP = 1.1, GAMBLE_RATIO = 0.5;
+constexpr double MIN_RATIO = 0.25, ANGER_MARKUP = 1.1;
 
 double round2(double v);  // Math.round(v*100)/100
 
@@ -39,7 +39,7 @@ struct HaggleIn {
 };
 
 Neg newNegotiation(double itemPrice, const std::string& type, int bonusRep = 0);
-// Throws std::runtime_error with the same Turkish messages as engine.js.
+// Throws std::runtime_error with the same messages as engine.js.
 Entry haggle(Neg& neg, const HaggleIn& in);
 // Returns a UTF-8 emoji (smile / neutral / frown / angry). neg may be null.
 const char* moodOf(const Neg* neg, const std::string& type);
