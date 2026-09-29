@@ -1,0 +1,46 @@
+name: APK
+
+# android/ değişince ya da elle (Actions → APK → Run workflow) çalışır.
+# Çıktı: çalışmanın altındaki "pazar-apk" çıktısı (giriş yapmış kullanıcılara açık, herkese açık release yok).
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Render adresi (boş bırakılırsa uygulama ilk açılışta sorar)"
+        required: false
+        default: ""
+  push:
+    branches: [ccr-7ab72bbd-hctq3y]
+    paths: ["android/**", ".github/workflows/apk.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build debug APK
+        working-directory: android
+        env:
+          PAZAR_URL: ${{ inputs.url }}
+        run: gradle --no-daemon assembleDebug
+
+      - name: Rename
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk pazar.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pazar-apk
+          path: pazar.apk

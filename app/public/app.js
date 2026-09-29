@@ -45,12 +45,14 @@ function renderJoin() {
       </button>`).join('')}</div>
     <h2>Adın</h2><input type="text" id="name" maxlength="16" placeholder="Adın" autocomplete="off">
     <button class="btn" id="go">Pazara Gir</button>
-    <button class="btn ghost" id="dm">Ben DM'im</button>`;
+    <button class="btn ghost" id="dm">Ben DM'im</button>
+    ${window.PazarApp ? '<button class="btn ghost" id="srv">⚙️ Sunucu adresi</button>' : ''}`;
 }
 function renderDMLogin() {
   $app.innerHTML = `<h1>🎲 DM</h1><p class="sub">PIN'i gir.</p>
     <input type="password" id="pin" inputmode="numeric" placeholder="PIN"><button class="btn" id="dmgo">Gir</button>
-    <button class="btn ghost" id="back">Geri</button>`;
+    <button class="btn ghost" id="back">Geri</button>
+    ${window.PazarApp ? '<button class="btn ghost" id="srv">⚙️ Sunucu adresi</button>' : ''}`;
 }
 
 // ---------- oyuncu ----------
@@ -218,6 +220,7 @@ $app.addEventListener('click', async (e) => {
   if (d.pick) { pick = d.pick; return render(); }
   if (t.id === 'dm') { pick = 'DM'; return render(); }
   if (t.id === 'back') { pick = null; return render(); }
+  if (t.id === 'srv') return void window.PazarApp.changeServer(); // Android kabuğu
   if (t.id === 'go') {
     const name = document.getElementById('name').value;
     if (!pick || !CH.find((c) => c.id === pick)) return toast('Karakter seç.');

@@ -1,0 +1,29 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Sunucu adresi APK'ya gömülebilir: gradle assembleDebug -PpazarUrl=https://pazar-xxxx.onrender.com
+// Verilmezse uygulama ilk açılışta adresi sorar.
+def pazarUrl = (project.findProperty('pazarUrl') ?: System.getenv('PAZAR_URL') ?: '').toString()
+
+android {
+    namespace 'app.pazar'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.pazar'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+        buildConfigField 'String', 'DEFAULT_URL', "\"${pazarUrl.replace('\\', '\\\\').replace('"', '\\"')}\""
+    }
+    buildFeatures { buildConfig true }
+    buildTypes {
+        release { minifyEnabled false }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
