@@ -12,16 +12,23 @@ static AsyncWebServer server(80);
 void setup() {
   Serial.begin(115200);
   delay(200);
+  // Dev builds may also join the home Wi-Fi, but only when real credentials are set (a failing STA scan disturbs the AP).
+  bool sta = false;
 #ifdef DEV_STA
-  WiFi.mode(WIFI_AP_STA);
-#else
-  WiFi.mode(WIFI_AP);
+  sta = strlen(STA_SSID) > 0 && strcmp(STA_SSID, "REPLACE") != 0 && strcmp(STA_SSID, "HomeWifi") != 0;
 #endif
+  WiFi.mode(sta ? WIFI_AP_STA : WIFI_AP);
+  WiFi.onEvent([](arduino_event_id_t ev, arduino_event_info_t info) {
+    if (ev == ARDUINO_EVENT_WIFI_AP_STACONNECTED) Serial.printf("wifi: station connected %02x:%02x:%02x:%02x:%02x:%02x\n", info.wifi_ap_staconnected.mac[0], info.wifi_ap_staconnected.mac[1], info.wifi_ap_staconnected.mac[2], info.wifi_ap_staconnected.mac[3], info.wifi_ap_staconnected.mac[4], info.wifi_ap_staconnected.mac[5]);
+    else if (ev == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) Serial.println("wifi: station left");
+    else if (ev == ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED) Serial.printf("wifi: ip assigned %s\n", IPAddress(info.wifi_ap_staipassigned.ip.addr).toString().c_str());
+    else if (ev == ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED) { static uint32_t n; if (++n % 20 == 1) Serial.printf("wifi: probe request #%u\n", (unsigned)n); }
+  });
   WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
-  WiFi.softAP(AP_SSID, AP_PASS, 6, 0, MAX_SSE);
-#ifdef DEV_STA
-  WiFi.begin(STA_SSID, STA_PASS);
-#endif
+  bool apOk = WiFi.softAP(AP_SSID, AP_PASS, 6, 0, MAX_SSE);
+  Serial.printf("softAP start: %s (ssid=%s, pass len=%u, mode=%d)\n", apOk ? "OK" : "FAILED", AP_SSID, (unsigned)strlen(AP_PASS), (int)WiFi.getMode());
+  WiFi.setTxPower(WIFI_POWER_11dBm);   // lower current spikes: weak USB ports / cables make the board brown out and drop the AP
+  if (sta) WiFi.begin(STA_SSID, STA_PASS);
   dns.start(53, "*", IPAddress(192, 168, 4, 1));   // captive portal: every name resolves to the ESP
   stateBegin();
   httpBegin(server);
