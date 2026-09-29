@@ -23,36 +23,36 @@ test.before(async () => {
 });
 test.after(() => server.close());
 
-test('DM şifresi: değiştirilir, eski PIN geçmez, diğer DM oturumları düşer, hash saklanır', async () => {
+test('DM password: it changes, the old PIN dies, other DM sessions drop, only a hash is stored', async () => {
   const a = (await login('9999')).body.token;
   const b = (await login('9999')).body.token;
-  const ali = (await call('join', { name: 'Ali', charId: 'ozan' })).body.token;
+  const ali = (await call('join', { name: 'Ali', charId: 'bard' })).body.token;
 
   assert.equal((await call('dm/password', { current: '9999', next: 'ejderha42' }, ali)).status, 403); // oyuncu olamaz
   assert.equal((await call('dm/password', { current: 'yanlis', next: 'ejderha42' }, a)).status, 403);
-  assert.equal((await call('dm/password', { current: '9999', next: 'kısa' }, a)).status, 400); // en az 6
+  assert.equal((await call('dm/password', { current: '9999', next: 'short' }, a)).status, 400); // at least 6
   assert.equal((await call('dm/password', { current: '9999', next: 'x'.repeat(65) }, a)).status, 400); // en fazla 64
   assert.equal((await call('dm/password', { current: '9999', next: 'ejderha42' }, a)).status, 200);
 
-  assert.equal((await call('dm/newday', {}, a)).status, 200);      // değiştiren oturum açık kalır
-  assert.equal((await call('dm/newday', {}, b)).status, 401);      // diğer DM oturumu düştü
-  assert.equal((await login('9999')).status, 403);                 // eski PIN artık geçmez
+  assert.equal((await call('dm/newday', {}, a)).status, 200);      // the session that changed it stays open
+  assert.equal((await call('dm/newday', {}, b)).status, 401);      // the other DM session dropped
+  assert.equal((await login('9999')).status, 403);                 // the old PIN no longer works
   const c = await login('ejderha42');
   assert.equal(c.status, 200);
   assert.equal(c.body.role, 'dm');
 
-  await new Promise((r) => setTimeout(r, 400)); // kayıt (debounce 200 ms)
+  await new Promise((r) => setTimeout(r, 400)); // saving (200 ms debounce)
   const raw = fs.readFileSync(process.env.DATA_FILE, 'utf8');
-  assert.equal(raw.includes('ejderha42'), false);                  // düz metin saklanmaz
+  assert.equal(raw.includes('ejderha42'), false);                  // plaintext is not stored
   const saved = JSON.parse(raw).settings.dmPass;
   assert.match(saved.salt, /^[0-9a-f]{32}$/);
   assert.match(saved.hash, /^[0-9a-f]{64}$/);
 
   assert.equal((await call('dm/password', { current: 'ejderha42', next: 'yeni şifre 7' }, c.body.token)).status, 200);
-  assert.equal((await login('yeni şifre 7')).status, 200);          // boşluk ve Türkçe harf serbest
+  assert.equal((await login('yeni şifre 7')).status, 200);          // spaces and non-ASCII letters are allowed
 });
 
-test('şifre hash’i DM görünümüne sızmaz', async () => {
+test('the password hash does not leak into the DM view', async () => {
   const tok = (await login('yeni şifre 7')).body.token;
   const ctl = new AbortController();
   const r = await fetch(`${base}/api/events?token=${tok}`, { signal: ctl.signal });

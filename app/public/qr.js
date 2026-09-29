@@ -1,5 +1,5 @@
-/* Bağımlılıksız QR kod üretici (bayt kipi, sürüm 1-10, düzeltme düzeyi L/M). Nayuki'nin QR Code generator algoritmasından uyarlanmıştır
-   (MIT lisanslı, https://www.nayuki.io/page/qr-code-generator-library). Tarayıcıda window.QR, Node'da module.exports. */
+/* Dependency-free QR code generator (byte mode, versions 1-10, error correction L/M). Adapted from Nayuki's QR Code generator algorithm
+   (MIT licensed, https://www.nayuki.io/page/qr-code-generator-library). window.QR in the browser, module.exports in Node. */
 (function (root, factory) { if (typeof module === 'object' && module.exports) module.exports = factory(); else root.QR = factory(); })(this, function () {
   'use strict';
   const ECC = { L: [-1, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18], M: [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26] };
@@ -43,7 +43,7 @@
     const ecl = opt.ecl === 'L' ? 'L' : 'M', bytes = utf8(text);
     let ver = 0;
     for (let v = 1; v <= 10; v++) { if (4 + (v < 10 ? 8 : 16) + bytes.length * 8 <= dataCodewords(v, ecl) * 8) { ver = v; break; } }
-    if (!ver) throw new Error('Metin QR için çok uzun');
+    if (!ver) throw new Error('Text is too long for a QR code');
     const bits = []; const push = (val, n) => { for (let i = n - 1; i >= 0; i--) bits.push((val >>> i) & 1); };
     push(4, 4); push(bytes.length, ver < 10 ? 8 : 16); bytes.forEach((b) => push(b, 8));
     const cap = dataCodewords(ver, ecl) * 8;
@@ -85,7 +85,7 @@
     const inv = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, (x) => x % 3 === 0, (x, y) => (x + y) % 3 === 0, (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0,
       (x, y) => ((x * y) % 2) + ((x * y) % 3) === 0, (x, y) => (((x * y) % 2) + ((x * y) % 3)) % 2 === 0, (x, y) => (((x + y) % 2) + ((x * y) % 3)) % 2 === 0];
     const applyMask = (k) => { for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!fn[y][x] && inv[k](x, y)) m[y][x] = !m[y][x]; };
-    const penalty = () => { // basit ceza: aynı renk dizileri, 2x2 bloklar, koyu oranı
+    const penalty = () => { // simple penalty: same-color runs, 2x2 blocks, dark ratio
       let p = 0;
       for (let a = 0; a < size; a++) for (const rowMode of [true, false]) {
         let run = 1;
@@ -104,7 +104,7 @@
     return m;
   }
 
-  // SVG: koyu zeminli sayfada da okunsun diye beyaz sessiz bölgeli (4 modül) siyah-beyaz üretir.
+  // SVG: black on white with a 4-module quiet zone so it also scans on a dark page.
   function svg(text, opt) {
     opt = opt || {};
     const m = matrix(text, opt), n = m.length, margin = opt.margin === undefined ? 4 : opt.margin, total = n + margin * 2;

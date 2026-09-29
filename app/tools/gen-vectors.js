@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
-// Kural motoru uyumluluk vektörleri: ileride başka bir dilde (ör. ESP32 için C++) yazılacak port aynı sonuçları vermeli.
-// Üret: npm run vectors   Doğrula: npm test (vectors.test.js, dosya güncel değilse başarısız olur)
+// Rule engine conformance vectors: a port in another language (e.g. C++ for the ESP32) must produce the same results.
+// Generate: npm run vectors   Verify: npm test (vectors.test.js fails if the file is stale)
 const fs = require('fs');
 const path = require('path');
 const E = require('../engine');
@@ -26,7 +26,7 @@ function run(c) {
 function generate() {
   const cases = [];
   const Xs = [100, 33.33, 1];
-  const types = ['comert', 'notr', 'acgozlu'];
+  const types = ['generous', 'neutral', 'greedy'];
   const approaches = ['persuasion', 'deception', 'intimidation'];
   for (const X of Xs) for (const type of types) {
     const ys = [X * 0.25 - 0.01, X * 0.25, X * 0.6, X * 0.95].map((v) => Math.round(v * 100) / 100).filter((v) => v > 0 && v < X);
@@ -34,12 +34,12 @@ function generate() {
       cases.push({ X, type, steps: [{ Y, approach, bonus: 3, rolls: [roll] }] });
     }
   }
-  // avantaj (iki zar), yakınlık DC indirimi, başlangıç sabır bonusu
+  // advantage (two dice), affinity DC reduction, starting patience bonus
   for (const type of types) for (const dcMod of [-1, -2, -3]) for (const rolls of [[3, 16], [10, 10], [19, 4]]) {
     cases.push({ X: 100, type, steps: [{ Y: 60, approach: 'persuasion', bonus: 2, rolls, dcMod }] });
   }
   for (const type of types) cases.push({ X: 100, type, bonusRep: 1, steps: [{ Y: 60, approach: 'deception', bonus: 0, rolls: [1] }, { Y: 60, approach: 'deception', bonus: 0, rolls: [1] }, { Y: 60, approach: 'deception', bonus: 0, rolls: [1] }] });
-  // çok adımlı: başarısızlık zinciri, düşük Y cezası, sinirlenme, kapanmış pazarlığa teklif
+  // multi-step: failure chain, lower-Y penalty, anger, an offer on a closed negotiation
   for (const type of types) {
     cases.push({ X: 100, type, steps: [
       { Y: 60, approach: 'persuasion', bonus: 0, rolls: [1] },
@@ -54,13 +54,13 @@ function generate() {
     ] });
     cases.push({ X: 100, type, steps: [{ Y: 60, approach: 'persuasion', bonus: 20, rolls: [12] }, { Y: 60, approach: 'persuasion', bonus: 0, rolls: [12] }] });
   }
-  // geçersiz girdiler
-  cases.push({ X: 100, type: 'notr', steps: [{ Y: 100, approach: 'persuasion', bonus: 0, rolls: [10] }, { Y: 0, approach: 'persuasion', bonus: 0, rolls: [10] }, { Y: 60, approach: 'kandirma', bonus: 0, rolls: [10] }] });
+  // invalid inputs
+  cases.push({ X: 100, type: 'neutral', steps: [{ Y: 100, approach: 'persuasion', bonus: 0, rolls: [10] }, { Y: 0, approach: 'persuasion', bonus: 0, rolls: [10] }, { Y: 60, approach: 'kandirma', bonus: 0, rolls: [10] }] });
   return {
-    about: 'Pazar kural motoru uyumluluk vektörleri. Her vaka, sırayla uygulanan adımları ve beklenen çıktıyı içerir.',
-    note: 'Fiyatlar 0,01 gp\'ye yuvarlanır (Math.round(v*100)/100). Hata adımları {error} döner ve durumu değiştirmez.',
+    about: 'Pazar rule engine conformance vectors. Each case holds the steps applied in order and the expected output.',
+    note: 'Prices are rounded to 0.01 gp (Math.round(v*100)/100). Error steps return {error} and do not change the state.',
     types: E.TYPES,
-    constants: { MIN_RATIO: E.MIN_RATIO, ANGER_MARKUP: E.ANGER_MARKUP, GAMBLE_RATIO: E.GAMBLE_RATIO },
+    constants: { MIN_RATIO: E.MIN_RATIO, ANGER_MARKUP: E.ANGER_MARKUP },
     cases: cases.map(run),
   };
 }
@@ -70,5 +70,5 @@ if (require.main === module) {
   const v = generate();
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(v) + '\n');
-  console.log(`${v.cases.length} vaka yazıldı: ${OUT} (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB)`);
+  console.log(`${v.cases.length} cases written: ${OUT} (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB)`);
 }

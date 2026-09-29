@@ -29,7 +29,7 @@ async function start() {
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise((res, rej) => {
-    child.stdout.on('data', (d) => { if (String(d).includes('Pazar açık')) res(); });
+    child.stdout.on('data', (d) => { if (String(d).includes('Pazar running')) res(); });
     child.on('exit', (c) => rej(new Error('server exited ' + c)));
     setTimeout(() => rej(new Error('server did not start')), 8000);
   });
@@ -83,7 +83,7 @@ function client(base) {
     if (r.status !== 200) throw new Error(`dm/reset failed: ${r.status} ${JSON.stringify(r.body)}`);
     return t;
   };
-  const join = async (name, charId = 'ozan') => (await call('join', { name, charId })).body.token;
+  const join = async (name, charId = 'bard') => (await call('join', { name, charId })).body.token;
   const dice = (tok, seq) => call('dm/dice', { seq }, tok);
   const view = async (tok) => { const s = await sse(tok); const v = await s.latest(300); s.close(); return v; };
   return { call, get, sse, dm, reset, join, dice, view };

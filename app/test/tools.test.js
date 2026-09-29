@@ -10,7 +10,7 @@ const tsScript = path.join(__dirname, '..', 'tools', 'tailscale.js');
 const bkScript = path.join(__dirname, '..', 'tools', 'backup.js');
 const skip = process.platform === 'win32';
 
-// Sahte `tailscale` komutu: status --json ve serve/funnel çağrılarını kaydeder.
+// Fake `tailscale` command: records status --json and serve/funnel calls.
 function stub({ state = 'Running', dns = 'pazar.tail1234.ts.net.', newSyntax = true } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-'));
   const bin = path.join(dir, 'tailscale');
@@ -30,7 +30,7 @@ const runTs = (s, args = [], env = {}) => spawnSync('node', [tsScript, ...args],
   encoding: 'utf8', env: { ...process.env, TAILSCALE_BIN: s.bin, DATA_FILE: path.join(s.dir, 'data', 'data.json'), PORT: '3000', ...env },
 });
 
-test('tailscale: serve başlatır, adresi yazar', { skip }, () => {
+test('tailscale: starts serve and writes the address', { skip }, () => {
   const s = stub();
   const r = runTs(s);
   assert.equal(r.status, 0, r.stderr);
@@ -41,22 +41,22 @@ test('tailscale: serve başlatır, adresi yazar', { skip }, () => {
   assert.equal(addr.funnel, false);
 });
 
-test('tailscale: eski sözdizimine düşer', { skip }, () => {
+test('tailscale: falls back to the old syntax', { skip }, () => {
   const s = stub({ newSyntax: false });
   const r = runTs(s);
   assert.equal(r.status, 0, r.stderr);
   assert.match(s.calls(), /serve --bg 3000/);
 });
 
-test('tailscale: kurulu değil / bağlı değil / MagicDNS yok net mesaj verir', { skip }, () => {
-  assert.equal(spawnSync('node', [tsScript], { encoding: 'utf8', env: { ...process.env, TAILSCALE_BIN: '/yok/tailscale' } }).status, 2);
+test('tailscale: not installed / not connected / no MagicDNS gives a clear message', { skip }, () => {
+  assert.equal(spawnSync('node', [tsScript], { encoding: 'utf8', env: { ...process.env, TAILSCALE_BIN: '/missing/tailscale' } }).status, 2);
   assert.equal(runTs(stub({ state: 'NeedsLogin' })).status, 3);
   const r = runTs(stub({ dns: '' }));
   assert.equal(r.status, 4);
   assert.match(r.stderr, /MagicDNS/);
 });
 
-test('tailscale: funnel zayıf PIN ile reddedilir, güçlü PIN ile açılır', { skip }, () => {
+test('tailscale: funnel is refused with a weak PIN and opens with a strong one', { skip }, () => {
   const s = stub();
   assert.equal(runTs(s, ['--funnel'], { DM_PIN: '1234' }).status, 5);
   assert.equal(s.calls().includes('funnel'), false);
@@ -66,7 +66,7 @@ test('tailscale: funnel zayıf PIN ile reddedilir, güçlü PIN ile açılır', 
   assert.equal(JSON.parse(fs.readFileSync(path.join(s.dir, 'data', 'address.json'), 'utf8')).funnel, true);
 });
 
-test('tailscale: --stop yayını kapatır ve adres dosyasını siler', { skip }, () => {
+test('tailscale: --stop closes the broadcast and deletes the address file', { skip }, () => {
   const s = stub();
   runTs(s);
   const r = runTs(s, ['--stop']);
@@ -75,7 +75,7 @@ test('tailscale: --stop yayını kapatır ve adres dosyasını siler', { skip },
   assert.equal(fs.existsSync(path.join(s.dir, 'data', 'address.json')), false);
 });
 
-test('backup: data ve media klasörlerini tgz olarak yazar', { skip }, () => {
+test('backup: writes the data and media folders as a tgz', { skip }, () => {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'bk-'));
   fs.mkdirSync(path.join(d, 'data')); fs.writeFileSync(path.join(d, 'data', 'data.json'), '{"x":1}');
   fs.mkdirSync(path.join(d, 'media')); fs.writeFileSync(path.join(d, 'media', 'a.png'), 'x');
@@ -88,13 +88,13 @@ test('backup: data ve media klasörlerini tgz olarak yazar', { skip }, () => {
   assert.match(list, /media\/a\.png/);
 });
 
-test('depo denetimi: izlenen dosyalar arasında görsel yok (telif ve depo herkese açık)', () => {
+test('repo check: no images among tracked files (copyright, and the repo is public)', () => {
   const r = spawnSync('git', ['ls-files', '-z'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
-  if (r.error || r.status !== 0) return; // git deposu değilse atla
+  if (r.error || r.status !== 0) return; // skip if this is not a git repo
   const files = r.stdout.split('\0').filter(Boolean);
   const images = files.filter((f) => /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(f));
-  assert.deepEqual(images, [], `depoya görsel girmiş: ${images.join(', ')}`);
+  assert.deepEqual(images, [], `an image was committed: ${images.join(', ')}`);
   const svgs = files.filter((f) => /\.svg$/i.test(f));
-  assert.deepEqual(svgs, ['public/icon.svg']); // yalnızca kendi uygulama simgemiz
+  assert.deepEqual(svgs, ['public/icon.svg']); // only our own app icon
   assert.ok(!files.some((f) => /^(media|data)\//.test(f)), 'media/ ve data/ depoya girmemeli');
 });

@@ -5,14 +5,14 @@ const fs = require('fs');
 const { generate, OUT } = require('../tools/gen-vectors');
 const E = require('../engine');
 
-test('uyumluluk vektörleri güncel (değilse: npm run vectors)', () => {
+test('conformance vectors are current (if not: npm run vectors)', () => {
   const file = JSON.parse(fs.readFileSync(OUT, 'utf8'));
   assert.deepEqual(file, JSON.parse(JSON.stringify(generate())));
 });
 
-test('vektörler motoru bağımsız yeniden oynatınca tutar ve yeterince geniştir', () => {
+test('the vectors hold when the engine replays them independently and are broad enough', () => {
   const file = JSON.parse(fs.readFileSync(OUT, 'utf8'));
-  assert.ok(file.cases.length >= 500, `vaka sayısı ${file.cases.length}`);
+  assert.ok(file.cases.length >= 500, `case count ${file.cases.length}`);
   const seen = new Set();
   for (const c of file.cases) {
     const neg = E.newNegotiation({ price: c.X }, c.type, c.bonusRep);
@@ -27,5 +27,5 @@ test('vektörler motoru bağımsız yeniden oynatınca tutar ve yeterince geniş
       seen.add(got.outcome || 'error');
     }
   }
-  for (const o of ['crit', 'success', 'fail', 'ret', 'angered', 'error']) assert.ok(seen.has(o), `vektörlerde ${o} sonucu yok`);
+  for (const o of ['crit', 'success', 'fail', 'ret', 'angered', 'error']) assert.ok(seen.has(o), `no ${o} outcome in the vectors`);
 });

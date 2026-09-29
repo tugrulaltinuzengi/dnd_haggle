@@ -1,15 +1,14 @@
 'use strict';
-// Pazarlık kuralları (PROJE.md, Bölüm 3). Saf fonksiyonlar, bağımlılık yok.
+// Haggling rules (PROJE.md, section 3). Pure functions, no dependencies.
 
 const TYPES = {
-  comert: { u: 0.5, dc: 12, rep: 4, name: 'Cömert' },
-  notr: { u: 1.0, dc: 15, rep: 3, name: 'Nötr' },
-  acgozlu: { u: 1.5, dc: 18, rep: 2, name: 'Açgözlü' },
+  generous: { u: 0.5, dc: 12, rep: 4, name: 'Generous' },
+  neutral: { u: 1.0, dc: 15, rep: 3, name: 'Neutral' },
+  greedy: { u: 1.5, dc: 18, rep: 2, name: 'Greedy' },
 };
 const APPROACHES = ['persuasion', 'deception', 'intimidation'];
 const MIN_RATIO = 0.25;
 const ANGER_MARKUP = 1.1;
-const GAMBLE_RATIO = 0.5;
 
 const round = (v) => Math.round(v * 100) / 100;
 
@@ -18,14 +17,14 @@ function newNegotiation(item, type, bonusRep = 0) {
   return { rep, maxRep: rep, lastY: null, price: item.price, status: 'open', history: [], line: null };
 }
 
-// status: 'open' (pazarlık sürüyor) | 'deal' (kritik/başarı, fiyat sabit) | 'angered' (Rep 0, 1.1X)
+// status: 'open' (haggling continues) | 'deal' (crit/success, price fixed) | 'angered' (Rep 0, 1.1X)
 function haggle(neg, { X, type, Y, approach, bonus, rolls, dcMod = 0 }) {
   const T = TYPES[type];
-  const dc = T.dc + dcMod; // yakınlık DC'yi düşürür (gizli)
-  if (!T) throw new Error('Bilinmeyen satıcı tipi');
-  if (!APPROACHES.includes(approach)) throw new Error('Bilinmeyen yaklaşım');
-  if (neg.status !== 'open') throw new Error('Bu pazarlık bitti.');
-  if (!(Y > 0) || Y >= X) throw new Error('Teklif etiket fiyatının altında olmalı.');
+  const dc = T.dc + dcMod; // affinity lowers the DC (hidden)
+  if (!T) throw new Error('Unknown merchant type');
+  if (!APPROACHES.includes(approach)) throw new Error('Unknown approach');
+  if (neg.status !== 'open') throw new Error('This negotiation is over.');
+  if (!(Y > 0) || Y >= X) throw new Error('Offer must be below the list price.');
 
   const entry = { y: Y, approach, rolls: [], roll: null, bonus, total: null, outcome: null, repLoss: 0 };
   let loss = 0;
@@ -34,7 +33,7 @@ function haggle(neg, { X, type, Y, approach, bonus, rolls, dcMod = 0 }) {
     entry.outcome = 'ret';
     loss = 1;
   } else {
-    if (neg.lastY != null && Y < neg.lastY) loss += 1; // önceki tekliften düşük
+    if (neg.lastY != null && Y < neg.lastY) loss += 1; // lower than the previous offer
     neg.lastY = Y;
     if (neg.rep - loss > 0) {
       const a = (X - Y) / 2;
@@ -69,7 +68,7 @@ function haggle(neg, { X, type, Y, approach, bonus, rolls, dcMod = 0 }) {
   return entry;
 }
 
-// Oyuncuya sayı göstermeden satıcının ruh hali.
+// The merchant's mood, shown to the player without numbers.
 function moodOf(neg, type) {
   if (!neg) return '😊';
   if (neg.rep <= 0) return '😡';
@@ -77,4 +76,4 @@ function moodOf(neg, type) {
   return r >= 0.75 ? '😊' : r >= 0.5 ? '😐' : '😠';
 }
 
-module.exports = { TYPES, APPROACHES, MIN_RATIO, ANGER_MARKUP, GAMBLE_RATIO, round, newNegotiation, haggle, moodOf };
+module.exports = { TYPES, APPROACHES, MIN_RATIO, ANGER_MARKUP, round, newNegotiation, haggle, moodOf };
