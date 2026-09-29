@@ -11,7 +11,7 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 
 ## 1. Durum
 
-**Şu anki sürüm: 0.12.** Ayrıntı Bölüm 12.
+**Şu anki sürüm: 0.12.1.** Ayrıntı Bölüm 12.
 
 **Çalışan:** kural motoru, canlı sunucu (DM + oyuncular, SSE), 6 karakter, pazarlık (zar, **Pazar** barı, Hard Gamble, Sez), **Yakınlık** sistemi (ayrı uzun vadeli bar, **tüm değerleri DM ayarlar**), teklifler (CRM hattı) ve Haftalık Pazar, alışveriş defteri (filtre + CSV), karanlık tema, masaüstü düzeni, Tailscale araçları, **davet adresi QR kodu**, PIN hız sınırı, yedek ve başlatma betikleri, medya katmanı, **DM eşya editörü** (açıklama, tür, nadirlik, görsel, varyant), Android WebView kabuğu. 50 birim/API/araç testi ve 6 senaryolu tarayıcı testi geçiyor. Kod: [app/](app/), [android/](android/).
 
@@ -170,7 +170,7 @@ Her altın hareketi kaydedilir: `{ t, hafta, gün, tür (alım, hard gamble, tek
 `render.yaml` ve `app/Dockerfile` hazır: Render → **New → Blueprint** → repo. Panelde **`DM_PIN`** gir. Kalıcı disk ücretli plan ister (starter), ücretsiz planda uyanınca pazar sıfırlanır. Sağlık kontrolü `/api/chars`. Docker imajı bu ortamda derlenemedi, aynı ortam değişkenleriyle `node server.js` doğrulandı. Kendi sunucunda: `docker build -t pazar app && docker run -p 3000:3000 -e NODE_ENV=production -e DM_PIN=xxxx -e PORT=3000 -v pazar-data:/data pazar`. Erişim Tailscale ile olacağı için Render şu an gereksiz, dosyalar yedek olarak duruyor.
 
 ### Android APK
-`android/` ince bir WebView kabuğu (oyun mantığı sunucuda). GitHub Actions derler (`.github/workflows/apk.yml`, derleme başarılı). **İndir:** GitHub → Actions → APK → son çalışma → Artifacts → `pazar-apk` (giriş gerekir, 90 gün). **Yeniden derle:** Run workflow, Render adresini kutuya yazarsan APK'ya gömülür. Kur: bilinmeyen kaynaklara izin ver, debug imzalıdır. İlk açılışta adresi sorar (Tailscale HTTPS adresi girilir), giriş ekranındaki **Sunucu adresi** düğmesiyle değişir. Yalnızca `https://` (`usesCleartextTraffic=false`). DM'in `prompt/confirm` pencereleri köprülü. **Cihazda henüz denenmedi.** Android araçları `dl.google.com` üzerinde, bu ortamın ağ politikası engelliyor, o yüzden derleme CI'da.
+`android/` ince bir WebView kabuğu (oyun mantığı sunucuda). GitHub Actions derler (`.github/workflows/apk.yml`, derleme başarılı). **İndir:** GitHub → Actions → APK → son çalışma → Artifacts → `pazar-apk` (giriş gerekir, 90 gün). **Yeniden derle:** Run workflow, Render adresini kutuya yazarsan APK'ya gömülür. Kur: bilinmeyen kaynaklara izin ver, debug imzalıdır. İlk açılışta adresi sorar (Tailscale HTTPS adresi girilir), giriş ekranındaki **Sunucu adresi** düğmesiyle değişir. Yalnızca `https://` (`usesCleartextTraffic=false`). DM'in `prompt/confirm` pencereleri köprülü. **Cihazda henüz denenmedi.** **Kurulum hatası ("Uygulama yüklenemedi", 0.12.1'de düzeltildi):** CI her derlemede yeni rastgele imza anahtarı üretiyordu ve iki derlemenin sürüm numarası aynıydı, bu yüzden yeni APK eskisinin üstüne kurulamıyordu. Artık **sabit imza anahtarı** (`android/app/pazar-debug.keystore`, yalnızca kişisel/debug kullanım, Play Store anahtarı değil) ve **CI çalışma numarasıyla artan sürüm kodu** var. **Telefonda daha önce Pazar kuruluysa bir kez kaldırıp yeniden kurun** (eski imzayla çakışır), sonraki güncellemeler üstüne kurulur. İndirilen dosya bir **zip**'tir: önce açın, içindeki `pazar.apk`'yı kurun. CI ayrıca APK'yı doğrular (imza, paket, SDK, izinler, boyut) ve sonucu iş günlüğüne yazar. Android araçları `dl.google.com` üzerinde, bu ortamın ağ politikası engelliyor, o yüzden derleme CI'da.
 
 ---
 
@@ -496,7 +496,11 @@ Gözlem soruları: açgözlü satıcı nötrden zor hissettirdi mi? Oyuncular ba
 
 Kural: her commit'te ilgili girdi eklenir. Numara: **0.x** geliştirme sürümleri, **v1.0** ilk kararlı hedef. Saatler UTC, tarih 29 Eylül 2026. **En yeni en üstte.**
 
-### 0.12 · Yakınlık DM'in, QR, eşya editörü (bu commit)
+### 0.12.1 · APK kurulum düzeltmesi (bu commit)
+- **Kod:** APK için **sabit imza anahtarı** ve **CI çalışma numarasıyla artan sürüm kodu/adı** (`0.12.<no>`), CI'da **APK doğrulama adımı** (`apksigner verify`, `aapt2 dump badging`, içerik listesi, SHA-256).
+- **Plan / hata:** Kullanıcı "Uygulama yüklenemedi (14 KB)" bildirdi. En olası neden: her CI derlemesi farklı rastgele imza anahtarıyla imzalanıyordu ve sürüm kodu hep 1'di, bu yüzden daha önce kurulu sürümün üstüne kurulamıyordu. Cihazda test edilemedi, doğrulama CI günlüğünden. Not: sabit anahtar depoda (kişisel debug amaçlı), Play Store için kullanılmaz.
+
+### 0.12 · Yakınlık DM'in, QR, eşya editörü (37c9423)
 - **Kod:** **Yakınlık ayarları DM'e ait:** aç/kapa, başlangıç, haftalık tavan, 4 seviye eşiği, seviye başına DC indirimi, sabır bonusu seviyesi, 6 kazanç/kayıp kalemi (doğrulamalı, varsayılana dön); kapalıyken çubuklar gizlenir, etkiler ve kilitler devre dışı kalır, değerler saklanır. **Ayar sekmesi** (taslak formu, canlı güncellemeyle silinmez). **QR kodu** (bağımlılıksız üretici, sürüm 1–10, L/M; `jsqr` ile 8 maske, çoklu sürüm ve Türkçe karakter doğrulandı) davet adresi kartında. **Eşya editörü:** açıklama, tür, nadirlik (rarite çerçeveleri), görsel, kopya/varyant (görselleri de çoğaltır), sunucuda doğrulama ve yarım eşya bırakmama (eski `dm/item` doğrulamadan önce kayıt açıyordu, düzeltildi), `dm/item` artık `id` döner. **8 eşzamanlı bağlantı** kapasite testi (7 oyuncu + DM, bir değişiklik hepsine < 1,5 sn). Testler: 50 birim/API/araç + 6 senaryolu tarayıcı testi.
 - **Plan:** cevaplar işlendi: Yakınlık değerleri DM'e yönelik (K19), kapasite hedefi 4 mobil + 2 PC, aynı anda 6 mümkün (K22), QR evet (K23). V3 tamamlandı. Test hatası düzeltildi: "satıcı tipi sızmasın" kontrolü yeni `type` alanına takılıyordu, artık satıcı tipi adlarını ve DC'yi arıyor. Açık sorular güncellendi.
 

@@ -40,6 +40,16 @@ jobs:
       - name: Rename
         run: cp android/app/build/outputs/apk/debug/app-debug.apk pazar.apk
 
+      - name: Verify APK (imza, paket, boyut)
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "build-tools: $BT"
+          "$BT/apksigner" verify --verbose --print-certs pazar.apk
+          "$BT/aapt2" dump badging pazar.apk | grep -E "^(package|sdkVersion|targetSdkVersion|uses-permission|application-label|launchable-activity)"
+          unzip -l pazar.apk
+          ls -l pazar.apk
+          sha256sum pazar.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: pazar-apk

@@ -10,12 +10,25 @@ android {
     namespace 'app.pazar'
     compileSdk 34
 
+    // Sabit imza: her derleme aynı anahtarla imzalanır, böylece yeni APK eskisinin üstüne kurulabilir.
+    // (Yalnızca kişisel/debug kullanım içindir, Play Store anahtarı değildir.)
+    signingConfigs {
+        debug {
+            storeFile file('pazar-debug.keystore')
+            storePassword 'pazar-debug'
+            keyAlias 'pazar-debug'
+            keyPassword 'pazar-debug'
+        }
+    }
+
     defaultConfig {
         applicationId 'app.pazar'
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        // Sürüm numarası CI çalışma numarasıyla artar: aynı ya da düşük numaralı APK üstüne kurulamaz.
+        def runNo = (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+        versionCode runNo
+        versionName "0.12.${runNo}"
         buildConfigField 'String', 'DEFAULT_URL', "\"${pazarUrl.replace('\\', '\\\\').replace('"', '\\"')}\""
     }
     buildFeatures { buildConfig true }
