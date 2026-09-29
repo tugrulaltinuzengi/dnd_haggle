@@ -93,3 +93,34 @@ test('özel istek (katalogda olmayan eşya)', async () => {
   assert.equal((await call('bid', { merchantId: m.id, itemName: 'Ejderha Yumurtası', price: 5000 }, ali)).status, 200);
   assert.equal((await call('bid', { merchantId: m.id, itemName: '  ', price: 5 }, ali)).status, 400);
 });
+
+test('defter: alım, teklif teslimi ve DM altın ayarı kaydedilir', async () => {
+  const dmView = await snap(dm);
+  assert.ok(dmView.ledger.some((e) => e.kind === 'offer' && e.amount === -12 && e.name === 'Uzun Kılıç'), 'teklif teslimi defterde');
+
+  const it = item('Çadır'); // 2 gp
+  assert.equal((await call('accept', { itemId: it.id }, ali)).status, 200);
+  const a = await snap(ali);
+  const buy = a.ledger.find((e) => e.kind === 'buy');
+  assert.equal(buy.amount, -2);
+  assert.equal(buy.list, 2);
+  assert.equal(a.me.gold, 66); // 68 - 2
+
+  const pid = (await snap(dm)).players.find((p) => p.name === 'Ali').id;
+  await call('dm/player', { id: pid, gold: 100 }, dm);
+  const adj = (await snap(ali)).ledger.find((e) => e.kind === 'dm');
+  assert.equal(adj.amount, 34); // 66 -> 100
+  // oyuncu yalnızca kendi kayıtlarını görür
+  assert.ok((await snap(veli)).ledger.every((e) => e.playerId !== pid));
+});
+
+test('oyuncuya sabır bilgisi gider (rep, maxRep), DC ve tip gitmez', async () => {
+  const it = item('Ejder Pulu'); // Grom, açgözlü
+  const r = await call('offer', { itemId: it.id, y: 60, approach: 'persuasion' }, veli);
+  assert.equal(r.status, 200);
+  const n = (await snap(veli)).negs[it.id];
+  assert.equal(typeof n.rep, 'number');
+  assert.ok(n.maxRep >= 2);
+  const raw = JSON.stringify(await snap(veli));
+  assert.ok(!/"dc"|"type"|"u":/.test(raw));
+});

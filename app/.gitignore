@@ -2,7 +2,7 @@ node_modules/
 data.json
 data-*.json
 
-# v2: telifli görseller depoya girmez (bkz. PLAN_V2.md)
+# v2: telifli görseller depoya girmez (bkz. PROJE.md)
 app/media/
 app/tools/import-items/input/
 app/tools/import-items/output/

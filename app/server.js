@@ -44,7 +44,7 @@ function seed() {
 }
 let S;
 try { S = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { S = seed(); }
-S.offers ||= []; S.week ||= 1;
+S.offers ||= []; S.week ||= 1; S.ledger ||= [];
 let saveT;
 function save() {
   clearTimeout(saveT);
@@ -54,6 +54,12 @@ const gp = (n) => `${(+n).toFixed(2).replace(/\.?0+$/, '')} gp`;
 function log(text, playerId = null) {
   S.log.push({ t: Date.now(), text, playerId });
   if (S.log.length > 80) S.log.shift();
+}
+
+// Alışveriş defteri: altın hareketlerinin tek kaydı (amount oyuncu açısından, - harcama, + gelir).
+function book(kind, p, { merchantId = null, name = '', amount, list = null }) {
+  S.ledger.push({ id: id(), t: Date.now(), day: S.day, week: S.week, kind, playerId: p.id, merchantId, name, amount: E.round(amount), list });
+  if (S.ledger.length > 1000) S.ledger.shift();
 }
 
 // ---------- yardımcılar ----------
@@ -81,13 +87,14 @@ function getNeg(p, item, merchant) {
   return (S.negs[k] ||= E.newNegotiation(item, merchant.type));
 }
 
-function grant(p, item, paid, damaged) {
+function grant(p, item, paid, damaged, kind) {
   if (p.gold < paid) fail('Altının yetmiyor.');
   if (item.stock !== null && item.stock <= 0) fail('Tükendi.');
   p.gold = E.round(p.gold - paid);
   p.inventory.push({ id: id(), itemId: item.id, name: item.name, paid, damaged, magical: item.magical });
   if (item.stock !== null) item.stock -= 1;
   delete S.negs[nkey(p.id, item.id)];
+  book(kind, p, { merchantId: item.merchantId, name: item.name, amount: -paid, list: item.price });
 }
 
 // ---------- teklifler (CRM) ----------
@@ -108,11 +115,12 @@ function playerView(p) {
     const n = S.negs[nkey(p.id, i.id)];
     if (!n) continue;
     const m = merchantOf(i.merchantId);
-    negs[i.id] = { status: n.status, price: n.price, lastY: n.lastY, mood: E.moodOf(n, m.type), line: n.line, history: n.history.slice(-3).map(({ y, approach, rolls, roll, bonus, total, outcome }) => ({ y, approach, rolls, roll, bonus, total, outcome })) };
+    negs[i.id] = { status: n.status, price: n.price, lastY: n.lastY, rep: n.rep, maxRep: n.maxRep, mood: E.moodOf(n, m.type), line: n.line, history: n.history.slice(-3).map(({ y, approach, rolls, roll, bonus, total, outcome }) => ({ y, approach, rolls, roll, bonus, total, outcome })) };
   }
   return {
     role: 'player', day: S.day, week: S.week, dmOnline: dmOnline(),
     bids: S.offers.filter((o) => o.playerId === p.id).map(offerView),
+    ledger: S.ledger.filter((e) => e.playerId === p.id).slice(-40),
     me: { id: p.id, name: p.name, charId: p.charId, gold: p.gold, advantage: p.advantage, inventory: p.inventory },
     merchants: S.merchants.map((m) => ({
       id: m.id, name: m.name, emoji: m.emoji, banned: isBanned(p.id, m.id),
@@ -125,7 +133,7 @@ function playerView(p) {
 }
 function dmView() {
   return {
-    role: 'dm', day: S.day, week: S.week, bids: S.offers.map(offerView), chars: CHARS.map((c) => c.id),
+    role: 'dm', day: S.day, week: S.week, bids: S.offers.map(offerView), ledger: S.ledger.slice(-150), chars: CHARS.map((c) => c.id),
     merchants: S.merchants, items: S.items, log: S.log.slice(-40),
     players: S.players.map((p) => ({ id: p.id, name: p.name, charId: p.charId, gold: p.gold, advantage: p.advantage, inventory: p.inventory })),
     negs: Object.entries(S.negs).map(([k, n]) => {
@@ -166,14 +174,14 @@ const P = {
     const item = itemOf(b.itemId), m = merchantOf(item.merchantId);
     const n = S.negs[nkey(p.id, item.id)];
     const paid = n ? n.price : item.price;
-    grant(p, item, paid, false);
+    grant(p, item, paid, false, 'buy');
     log(`${p.name} satın aldı: ${item.name} · ${gp(paid)} (${m.name})`, p.id);
   },
   gamble(p, b) {
     const item = itemOf(b.itemId), m = merchantOf(item.merchantId);
     if (item.magical) fail('Büyülü eşyada Hard Gamble yok.');
     const paid = E.round(item.price * E.GAMBLE_RATIO);
-    grant(p, item, paid, true);
+    grant(p, item, paid, true, 'gamble');
     log(`${p.name} HARD GAMBLE: ${item.name} · ${gp(paid)} (${m.name}) · kusurlu`, p.id);
   },
   bid(p, b) {
@@ -186,7 +194,7 @@ const P = {
     const o = { id: id(), playerId: p.id, merchantId: m.id, itemId: item ? item.id : null, itemName: item ? item.name : text(b.itemName), price, note: noteOf(b.note), from: 'player', by: 'player', status: 'new', week: S.week, t: Date.now(), history: [] };
     hist(o, 'player', 'teklif', price, o.note);
     S.offers.push(o);
-    log(`📨 ${p.name} → ${m.name}: ${o.itemName} için ${gp(price)} teklif`, p.id);
+    log(`${p.name} → ${m.name}: ${o.itemName} için ${gp(price)} teklif`, p.id);
   },
   bidreply(p, b) {
     const o = offerOf(b.id);
@@ -204,7 +212,7 @@ const P = {
       if (!OPEN.includes(o.status)) fail('Bu teklif kapalı.');
       o.status = 'withdrawn'; hist(o, 'player', 'geri çekti', o.price);
     } else fail('Bilinmeyen işlem');
-    log(`📨 ${p.name}: ${o.itemName} teklifi → ${o.status}`, p.id);
+    log(`${p.name}: ${o.itemName} teklifi → ${o.status}`, p.id);
   },
   insight(p, b) {
     const m = merchantOf(b.merchantId), key = bkey(p.id, m.id);
@@ -224,7 +232,7 @@ const D = {
   merchant(b) {
     if (!E.TYPES[b.type]) fail('Tip seç.');
     const m = b.id ? merchantOf(b.id) : S.merchants[S.merchants.push({ id: id() }) - 1];
-    Object.assign(m, { name: text(b.name), emoji: text(b.emoji || '🧑', 8), type: b.type });
+    Object.assign(m, { name: text(b.name), emoji: String(b.emoji ?? m.emoji ?? '').trim().slice(0, 8), type: b.type });
   },
   item(b) {
     merchantOf(b.merchantId);
@@ -240,7 +248,11 @@ const D = {
   },
   player(b) {
     const p = playerOf(b.id);
-    if (b.gold !== undefined) p.gold = num(b.gold);
+    if (b.gold !== undefined) {
+      const g = num(b.gold), d = E.round(g - p.gold);
+      if (d) book('dm', p, { name: 'DM altın ayarı', amount: d });
+      p.gold = g;
+    }
     if (b.advantage !== undefined) p.advantage = !!b.advantage;
   },
   bidreply(b) {
@@ -264,7 +276,7 @@ const D = {
     const o = { id: id(), playerId: p.id, merchantId: it.merchantId, itemId: it.id, itemName: it.name, price, note: noteOf(b.note), from: 'dm', by: 'dm', status: 'counter', week: S.week, t: Date.now(), history: [] };
     hist(o, 'dm', 'teklif gönderdi', price, o.note);
     S.offers.push(o);
-    log(`📨 ${merchantOf(it.merchantId).name} → ${p.name}: ${it.name} için ${gp(price)} teklif`, p.id);
+    log(`${merchantOf(it.merchantId).name} → ${p.name}: ${it.name} için ${gp(price)} teklif`, p.id);
   },
   weekly() {
     const done = [];
@@ -279,12 +291,13 @@ const D = {
       p.gold = E.round(p.gold - o.price);
       p.inventory.push({ id: id(), itemId: o.itemId, name: o.itemName, paid: o.price, damaged: false, magical: it ? it.magical : false });
       if (it && it.stock !== null) it.stock -= 1;
+      book('offer', p, { merchantId: o.merchantId, name: o.itemName, amount: -o.price, list: it ? it.price : null });
       o.status = 'settled'; hist(o, 'dm', 'teslim edildi', o.price);
       done.push(o);
     }
     S.week += 1;
     D.newday();
-    log(`🎪 Haftalık Pazar: ${done.length} teslimat, yeni hafta ${S.week}`);
+    log(`Haftalık Pazar: ${done.length} teslimat, yeni hafta ${S.week}`);
   },
   newday() { S.day += 1; S.negs = {}; S.bans = {}; log(`Yeni gün: ${S.day}`); },
   line(b) {

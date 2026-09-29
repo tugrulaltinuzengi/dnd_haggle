@@ -1,5 +1,5 @@
 'use strict';
-// Pazarlık kuralları (DM_PAKETI.md). Saf fonksiyonlar, bağımlılık yok.
+// Pazarlık kuralları (PROJE.md, Bölüm 3). Saf fonksiyonlar, bağımlılık yok.
 
 const TYPES = {
   comert: { u: 0.5, dc: 12, rep: 4, name: 'Cömert' },
