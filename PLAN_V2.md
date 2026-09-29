@@ -1,6 +1,6 @@
 # v2 Güncelleme Planı — Konuşan Portreler ve Eşya Kütüphanesi (yerel)
 
-**Hedef:** (A) Satıcı ve alıcı portreleri, yüklenen tek bir gerçekçi fantazi resminden uygulamanın kendi ürettiği **5 ağız karesiyle** konuşsun. (B) Satıcı eşyayı elle yazmak yerine görselli bir **eşya kütüphanesinden** seçsin.
+**Hedef:** (A) Satıcı ve alıcı portreleri, yüklenen tek bir gerçekçi fantazi resminden uygulamanın kendi ürettiği **5 ağız karesiyle** konuşsun. (B) Satıcı eşyayı elle yazmak yerine görselli bir **eşya kütüphanesinden** seçsin; kütüphane **5e.tools eşya adlarını** temel alsın. (C) Satıcı **kendi eşyasını üretip satabilsin ve kendi görselini kullanabilsin**. (D) Kütüphanenin görselleri, **subagent'larla çalışan bir otomasyonla** bulunsun ya da üretilsin ve PNG'ye çevrilsin.
 
 **Çerçeve (kesinleşti):**
 - **Yerel çalışır.** Sunucu DM'in bilgisayarında koşar, oyuncular aynı ağdan (Wi-Fi) bağlanır. Render ve bulut bu sürümün konusu değil.
@@ -15,7 +15,8 @@
 | Kaynak | Durum | Nasıl kullanılır |
 |---|---|---|
 | **The Crooked Moon** | Lisanslı, DM'in sahibi. (26 mirasçı büyülü eşya, [Foundry](https://foundryvtt.com/packages/the-crooked-moon-2014), [D&D Beyond](https://www.dndbeyond.com/tag/the-crooked-moon), Roll20.) | DM'in kendi kopyasından içe aktarılır. Foundry'de kurulu paketin klasörü okunur ya da eşyalar elle girilir (paket yapısı **uygulamada doğrulanacak**). Yayıncıya ek izin gerekmez, ama içerik yine de dağıtılmaz. |
-| **5e.tools** | Resmî D&D içeriği, sitenin veri ve görselleri telifli. WotC 2024'te 5etools deposuna DMCA talebi gönderdi ([haber](https://tildes.net/~games.tabletop/1i39/5etools_repository_taken_down_after_dmca_request_by_wizards_of_the_coast)). | Ticari olmayan yerel kullanım riski düşürür, telifi ortadan kaldırmaz. Araç siteyi **taramaz**, DM'in kendi yerel kopyasındaki veri ve görselleri okur. |
+| **5e.tools** | **Vazgeçilmez** kaynak (eşya adları, tür, nadirlik, fiyat). Sitenin veri ve görselleri telifli. WotC 2024'te 5etools deposuna DMCA talebi gönderdi ([haber](https://tildes.net/~games.tabletop/1i39/5etools_repository_taken_down_after_dmca_request_by_wizards_of_the_coast)). | **Adlar ve oyun verisi** DM'in yerel `items.json` kopyasından okunur (araç siteyi taramaz). Sitenin görselleri kullanılmaz, görseller Bölüm 6'daki otomasyonla bulunur/üretilir. |
+| **Web görselleri** | Üçüncü taraf, telifli. Google Görseller sonuçlarını otomatik kazımak Google'ın hizmet şartlarına aykırı ve kırılgan (engel, captcha). Google'ın resmî görsel arama API'si 2025'ten beri **yeni müşterilere kapalı**, 1 Ocak 2027'de kapanıyor ([Google](https://developers.google.com/custom-search/v1/overview)). | **Google Görseller kazıyıcısı kurulmaz.** Yerine lisans bilgisi taşıyan kaynaklar (Openverse, Wikimedia Commons) ve yerel üretim kullanılır (Bölüm 6). |
 | **Açık set** | game-icons.net (CC BY 3.0), Open5e / SRD (CC-BY 4.0). | Kutudan çıkınca çalışan varsayılan. Atıf "Hakkında" ekranında. |
 
 **Depo kuralı:** Depo herkese açık. **Görseller, Crooked Moon metni ve 5e.tools verisi depoya girmez.** Hepsi `app/media/` ve `app/data/` altında, `.gitignore`'da. (Depoyu özel yaparsanız bile kural kalır: yerel dosyalar depoda değil, yedeğinizde durur.)
@@ -34,6 +35,9 @@ Bu hukuki tavsiye değildir.
 | K5 | Görsel biçimi | Eşya: **PNG** (saydam), 512×512 + 128×128 küçük resim. Portre: PNG sprite sayfası, kare başı 768×768, 5 kare yan yana. |
 | K6 | APK | ✅ LAN'daki `http://` adrese bağlanmak için **cleartext izni** açılır (yalnızca yerel ağ kullanımında kabul edilebilir). |
 | K7 | Kaynak dosyaların yeri | ⬜ DM belirler: Crooked Moon Foundry paketi mi, elle giriş mi? 5e.tools yerel kopyası nerede? |
+| K8 | Satıcının kendi eşyası | ✅ Satıcı eşya üretir, kendi görselini yükler. Eşyalar `owner` alanı taşır (ileride oyuncu tezgâhı için hazır). |
+| K9 | Görsel bulma yöntemi | ⬜ Öneri: **yerel üretim** (tutarlı gerçekçi fantazi stili) + Openverse/Wikimedia (sıradan eşyalar) + DM'in kendi görselleri. DM donanımı (GPU) ve tercihi belirler. |
+| K10 | Otomasyon çatısı | ✅ Claude Code subagent'ları, DM'in makinesinde yerel çalışır. Sonuçlar DM onayından geçer. |
 
 ---
 
@@ -127,22 +131,80 @@ Gerçekçi yüzlerde basit "çene kaydırma" plastik durur. Bu yüzden:
 
 ---
 
-## 5. Aşamalar
+## 5. Özellik C — Satıcı kendi eşyasını üretip satar
+
+Satıcı (DM) kütüphanede olmayan ya da değiştirilmiş eşyaları kendisi oluşturur ve kendi görselini kullanır.
+
+- **Eşya editörü** (Pazar → + Eşya → *Yeni eşya*): ad, kısa açıklama, tür, nadirlik, büyülü mü, fiyat, stok, **görsel**.
+- **Kendi görselin:** telefondan kamera/galeri ya da bilgisayardan dosya. Uygulama görseli kare kırpar, isteğe bağlı arka planı siler, **512 PNG + küçük resim** yapar. Görsel yoksa tür ikonu görünür.
+- **Varyant üret:** Kütüphaneden bir eşya seçip "Kopyala ve değiştir" ile (ör. *+1 Uzun Kılıç → Don Kılıcı*) yeni eşya çıkar. Kaynak `custom`, lisans "kendi" olarak kaydedilir.
+- **Satışa koy:** Üretilen eşya doğrudan satıcının rafına düşer, stok ve fiyat orada ayarlanır. Aynı eşya başka satıcıya da eklenebilir.
+- **Veri:** `owner: merchantId` alanı tutulur. İleride oyuncu da tezgâh açabilsin diye `owner` oyuncu da olabilecek şekilde tasarlanır. Bu sürümde sadece satıcılar (DM) üretir.
+- **Yetki:** Yalnızca DM üretir ve düzenler. Yüklenen dosya sunucuda yeniden kodlanır.
+
+**Bitiş ölçütleri:** Telefondan çekilen fotoğrafla eşya oluşturulur, pazarda, pazarlıkta ve çantada görünür. Varyant kaynağı ve fiyatı korunur. Görselsiz eşya tür ikonuyla görünür.
+
+---
+
+## 6. Özellik D — Görsel bulucu otomasyonu (subagent'lar)
+
+**Amaç:** 5e.tools eşya adlarının her biri için uygun bir **gerçekçi fantazi** görsel bulmak ya da üretmek ve PNG'ye çevirmek. DM'in müdahalesi sadece onay ekranında.
+
+### Ne yapılmaz
+Google Görseller'i HTML olarak kazıyan araç **kurulmaz**: Google'ın şartlarına aykırı, kırılgan, sonuçlar telifli ve stil olarak tutarsız (gerçek kılıç fotoğrafı, oyun karesi, filigranlı ürün resmi karışık gelir). Google'ın resmî API'si de yeni müşteriye kapalı. Zaten motoru olan biri için isteğe bağlı `google-cse` bağdaştırıcısı yazılabilir (100 ücretsiz sorgu/gün, sonrası ücretli, 2027'de kapanıyor). Çekirdek plana girmez.
+
+### Görsel kaynakları (bağdaştırıcı, öncelik sırasıyla)
+| # | Kaynak | Ne için | Not |
+|---|---|---|---|
+| 1 | `local-folder` / `foundry-package` | DM'in kendi görselleri, Crooked Moon | Her zaman öncelikli |
+| 2 | `generate-local` | Tüm eşyalar, **tutarlı stil** | Yerel bir görüntü üretici (ör. ComfyUI/Automatic1111 API'si) çağrılır. Sabit komut şablonu: *"realistic fantasy <ad>, isolated object, studio lighting, no text"*. GPU'da eşya başı birkaç saniye. GPU yoksa yavaş ya da uygun değil (K9). |
+| 3 | `openverse`, `wikimedia` | Sıradan eşyalar (ip, meşale, kılıç, zırh) | Lisans bilgisi döner (CC0 / CC-BY…), atıf manifeste yazılır. Fantazi/büyülü eşyalarda genelde sonuç yoktur. |
+| 4 | `google-cse` (isteğe bağlı) | Sadece zaten motoru olanlar | Kullanılabilirlik 2027'de biter |
+
+**Beklenti (dürüst):** Web kaynaklarının fantazi eşyalardaki isabeti düşüktür. Tutarlı gerçekçi fantazi görünüm için **yerel üretim ana yol**, web kaynakları sıradan eşyalar için destek olur.
+
+### Hat ve subagent'lar
+Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yönetir, işçi subagent'ları paralel çalıştırır.
+
+1. **İsim kuyruğu (CLI `names`)**: DM'in yerel 5e.tools `items.json` / `items-base.json` dosyalarından eşya adı, tür, nadirlik, fiyat, kaynak okunur (alan adları **uygulamada doğrulanacak**). Açık set (Open5e/SRD) tabandır. Sonuç `queue.json` dosyasına yazılır, **kaldığı yerden devam eder**.
+2. **`item-image-finder` (subagent)**: 20'lik gruplarla adlar için adayları toplar. Sırayla kaynak 1 → 3'ü dener, bulunamazsa 2'ye (üretim) düşer. Adayları `staging/` klasörüne indirir/üretir (en çok 4 aday), kaynak URL'si, lisans ve sorgu manifeste yazılır. Sorgu hız sınırına uyar.
+3. **`item-image-judge` (subagent, görsel değerlendirme)**: Adayları görür (Read ile resim açar). Ölçüt: doğru eşya mı, **tek nesne** mi, gerçekçi fantazi stili mi, yazı/filigran/çerçeve/arayüz yok mu, çözünürlük ≥ 512 px mi. En iyisini seçer ya da **reddeder** (ret nedeniyle). Reddedilenler üretim kuyruğuna gider (en çok 2 deneme).
+4. **`item-image-processor` (subagent)**: Seçilen görseli 512 PNG ve 128 küçük resme çevirir, arka planı siler (`rembg` benzeri yerel araç ya da renk maskesi), içeriği kırpıp ortalar, doku ve ışık farkını hafif dengeler. `app/media/items/` altına yazar, `library.json`'a kayıt ekler (kaynak, lisans, sorgu, karar notu).
+5. **DM onay ekranı (uygulamada, Bölüm 4)**: Seçilen görsel ve alternatifler yan yana görünür. DM **onayla / başkasını seç / kendi görselini yükle / yeniden üret** der. Onaylanmayan görsel oyunculara görünmez (tür ikonu görünür).
+6. **Rapor:** kaç eşya, kaçı otomatik onaylandı / DM onayında / reddedildi, kaynak dağılımı, tahmini süre.
+
+### Konfigürasyon ve sınırlar
+- `tools/item-images/config.json`: kaynak sırası, üretici adresi, aday sayısı, paralellik (öneri 3 işçi), zaman aşımı.
+- **Yerel ve özel:** Görseller `app/media/` içinde, `.gitignore`'da. Manifest kaynak URL'sini tutar, `purge --source <ad>` ile bir kaynak toplu silinir. APK görselleri paketlemez, çalışma anında DM sunucusundan alır.
+- **Maliyet:** Yerel üretim ve Openverse ücretsiz. (İsteğe bağlı `google-cse` için ücret ve kota, güncel koşullar doğrulanmalı.)
+- **Süre (tahmini):** 2.000 eşya için yerel üretimde GPU'ya bağlı birkaç saat, gece çalıştırılabilir.
+
+### Bitiş ölçütleri
+- 50 adlık örnek partide: her ad için bir görsel (otomatik seçim ya da üretim) veya tür ikonu vardır. Boş kutu yok.
+- Judge, bilerek koyulan kötü adayları (filigranlı, çok nesneli, yazılı) reddeder.
+- Kuyruk yarıda kesilip yeniden başlatılınca kaldığı yerden sürer.
+- Depoda hiç görsel, veri dosyası ya da manifest yok, `git ls-files` denetimi geçer.
+- Her kayıtta kaynak, lisans ve karar notu dolu.
+
+---
+
+## 7. Aşamalar
 
 | Sürüm | Aşama | İş | Boyut |
 |---|---|---|---|
-| — | **V0** Karar kilidi | K7: kaynak dosyalar nerede? Portre kaynakları hazır mı? | S |
+| — | **V0** Karar kilidi | K7 ve K9: kaynak dosyalar nerede, GPU var mı, hangi üretici? | S |
 | v1.1 | **V1** Yerel çalıştırma | LAN adresleri, QR, güvenlik duvarı rehberi, yedek betiği, başlatma betikleri, APK cleartext izni | M |
-| v1.1 | **V2** Medya katmanı | `/api/media` yükleme (boyut, tür, yeniden kodlama), yerel disk, `/media` sunumu, önbellek, testler | M |
-| v1.1 | **V3** Portre + ağız kareleri | Yükleme, yüz işareti + ağ deformasyonu, ağız içi dokuları, yedek 2 dokunuş yolu, önizleme ve ince ayar, sprite kaydı | L |
-| v1.1 | **V4** Konuşma animasyonu | Baloncuk metni → kare eşlemesi, satıcı ve alıcı portreleri, ruh hâli efektleri, oyuncu avatarı | M |
-| v1.2 | **V5** Kütüphane çekirdeği | Veri modeli, `open` kaynağı, tür ikonları, rarite çerçeveleri, "Hakkında" ve lisans ekranı | M |
-| v1.2 | **V6** İçe aktarma aracı | `local-5etools`, `local-folder`, `foundry-package`, PNG hattı, eşleştirme, kapsam raporu, depo denetimi | L |
-| v1.2 | **V7** DM seçicisi ve şablonlar | Izgara arama, süzgeç, otomatik doldurma, dükkân şablonları, görsellerin oyuncu ekranlarında gösterimi | L |
-| v2.0 | **V8** Crooked Moon | 26 eşyanın içe aktarımı ya da elle girişi, ekran doğrulaması | S |
-| v2.0 | **V9** APK ve sürüm | `versionCode 2`, görsel önbelleği, cihazda test, uzaktaki oyuncular için isteğe bağlı tünel rehberi | M |
+| v1.1 | **V2** Medya katmanı | `/api/media` yükleme (boyut, tür, yeniden kodlama, kare kırpma), yerel disk, `/media` sunumu, önbellek, testler | M |
+| v1.1 | **V3** Satıcı eşya üretimi | Eşya editörü, **kendi görseli** (kamera/galeri), varyant üret, `owner` alanı, tür ikonları, rarite çerçeveleri | M |
+| v1.1 | **V4** Portre + ağız kareleri | Yükleme, yüz işareti + ağ deformasyonu, ağız içi dokuları, yedek 2 dokunuş yolu, önizleme ve ince ayar, sprite kaydı | L |
+| v1.1 | **V5** Konuşma animasyonu | Baloncuk metni → kare eşlemesi, satıcı ve alıcı portreleri, ruh hâlleri, oyuncu avatarı | M |
+| v1.2 | **V6** Kütüphane çekirdeği ve 5e.tools verisi | Veri modeli, `open` kaynağı, `local-5etools` **ad ve veri** aktarımı, ad eşleştirme, "Hakkında" ve lisans ekranı, depo denetimi | L |
+| v1.2 | **V7** Görsel bulucu otomasyonu | İsim kuyruğu, `item-image-finder`/`-judge`/`-processor` subagent'ları, `generate-local`, Openverse/Wikimedia, arka plan silme, kaldığı yerden devam, rapor | L |
+| v1.2 | **V8** DM seçici, onay ekranı, şablonlar | Kütüphane ızgarası, süzgeç, otomatik doldurma, **görsel onay kuyruğu**, dükkân şablonları | L |
+| v2.0 | **V9** Crooked Moon | 26 eşyanın içe aktarımı ya da elle girişi, ekran doğrulaması | S |
+| v2.0 | **V10** APK ve sürüm | `versionCode 2`, görsel önbelleği, cihazda test, uzaktaki oyuncular için isteğe bağlı tünel rehberi | M |
 
-**Sıra:** V1 ve V2 iki özelliğin ortak temeli. Portre (V3–V4) ve kütüphane (V5–V7) birbirinden bağımsız, ayrı ilerleyebilir. Kütüphane açık setle başlar, DM'in yerel kopyaları V6'da bağlanır.
+**Sıra:** V1–V2 tüm özelliklerin temeli. **V3 (satıcı kendi eşyası ve görseli) medya katmanından hemen sonra gelir**, çünkü kütüphane ve otomasyon olmadan da işe yarar. Portre (V4–V5) ve kütüphane (V6–V8) birbirinden bağımsız ilerleyebilir. Otomasyon (V7) V6'nın ad kuyruğuna ve V2'nin medya katmanına dayanır.
 
 ### Genel testler
 - Birim: viseme eşlemesi, slug ve eşleştirme, rarite fiyat tablosu, medya doğrulaması.
@@ -152,7 +214,7 @@ Gerçekçi yüzlerde basit "çene kaydırma" plastik durur. Bu yüzden:
 
 ---
 
-## 6. Riskler
+## 8. Riskler
 
 | Risk | Etki | Önlem |
 |---|---|---|
@@ -162,12 +224,19 @@ Gerçekçi yüzlerde basit "çene kaydırma" plastik durur. Bu yüzden:
 | IP adresi değişir | Bağlanamama | QR, APK'da sunucu adresi düğmesi, isteğe bağlı sabit IP/mDNS |
 | DM'in bilgisayarı kapalıyken pazar yok | Oturum dışı erişim yok | Beklenen davranış (yerel), gerekirse tünel |
 | Foundry paket yapısı beklenenden farklı | İçe aktarma çalışmaz | `local-folder` ve `manual` yedekleri, V0'da doğrulama |
-| Kaynaklar arası stil farkı | Tutarsız görünüm | Kadraj normalizasyonu, rarite çerçevesi, gölge |
+| Kaynaklar arası stil farkı | Tutarsız görünüm | Kadraj normalizasyonu, rarite çerçevesi, gölge, yerel üretimi ana yol yapmak |
+| Web görsellerinde düşük isabet (fantazi eşyalar) | Yanlış ya da kalitesiz görsel | Judge subagent'ı, DM onayı, üretime düşme |
+| Yerel üretim için GPU yok | Otomasyon yavaş ya da imkânsız | K9: Openverse + kendi görselleri + tür ikonları ile başla, üretimi sonra ekle |
+| Google Görseller'e bağımlılık | Şart ihlali, engel, kapanan API | Kurulmaz, alternatif kaynaklar (Bölüm 6) |
+| Subagent hatalı görsel seçer | Yanlış eşya görseli | Judge ret nedeni, DM onay kuyruğu, onaysız görsel oyunculara görünmez |
+| Kullanıcı görseli zararlı dosya olabilir | Güvenlik | Yeniden kodlama, boyut ve tür sınırı, yalnızca DM yükler |
 
 ---
 
-## 7. Açık sorular (DM)
-1. **Crooked Moon nereden?** Foundry'de kurulu paketiniz var mı, yoksa PDF/D&D Beyond mi? (PDF ise 26 eşya için elle giriş en kısa yol.)
-2. **5e.tools kopyası:** Yerelde bir kopyanız var mı, yoksa açık set + elle eklemeyle mi başlayalım?
-3. **Portreler:** Elinizde hazır gerçekçi fantazi portreler var mı, yoksa kendiniz mi üreteceksiniz? Ağız kapalı, önden bakan çekimlere ihtiyaç var.
-4. **Oyuncular nerede?** Hepsi aynı odada/Wi-Fi'de mi, yoksa uzaktan bağlanan var mı? (Uzaktakiler için tünel aşaması öne alınır.)
+## 9. Açık sorular (DM)
+1. **Görsel üretimi:** Bilgisayarınızda GPU'lu bir ekran kartı var mı? Yerel üretimi ana yol yapıp yapamayacağımızı bu belirler. Yoksa hangi yolu tercih edersiniz (yalnız Openverse ve kendi görselleriniz, ücretli bir görüntü üretme servisi)?
+2. **5e.tools verisi:** Yerelde `items.json` gibi bir kopyanız var mı? Yoksa siteden kendiniz indirip bir klasöre koyabilir misiniz?
+3. **Satıcı üretimi:** Sadece DM üretsin mi, yoksa oyuncular da tezgâh açsın mı? (Tasarım ikisine de hazır, bu sürümde sadece DM.)
+4. **Crooked Moon nereden?** Foundry'de kurulu paketiniz var mı, yoksa PDF/D&D Beyond mi? (PDF ise 26 eşya için elle giriş en kısa yol.)
+5. **Portreler:** Elinizde hazır gerçekçi fantazi portreler var mı, yoksa kendiniz mi üreteceksiniz? Ağız kapalı, önden bakan çekimlere ihtiyaç var.
+6. **Oyuncular nerede?** Hepsi aynı odada/Wi-Fi'de mi, yoksa uzaktan bağlanan var mı? (Uzaktakiler için tünel aşaması öne alınır.)
