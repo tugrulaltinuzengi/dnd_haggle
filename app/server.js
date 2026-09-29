@@ -20,7 +20,8 @@ const MEDIA_LIMITS = { item: 700 * 1024, thumb: 60 * 1024, portrait: 400 * 1024,
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const PUBLIC = path.join(__dirname, 'public');
 const CHARS = JSON.parse(fs.readFileSync(path.join(PUBLIC, 'chars.json'), 'utf8'));
-const FIXED = process.env.DICE_FIXED ? process.env.DICE_FIXED.split(',').map(Number) : null; // yalnızca test
+let FIXED = process.env.DICE_FIXED ? process.env.DICE_FIXED.split(',').map(Number) : null; // yalnızca test
+const DEV_RESET = process.env.DEV_RESET === '1'; // yalnızca test: dm/reset ve dm/dice uçları
 let fixedI = 0;
 const d20 = () => (FIXED ? FIXED[fixedI++ % FIXED.length] : 1 + crypto.randomInt(20));
 const id = () => crypto.randomBytes(5).toString('hex');
@@ -360,8 +361,9 @@ const P = {
 const D = {
   merchant(b) {
     if (!E.TYPES[b.type]) fail('Tip seç.');
+    const name = text(b.name); // önce doğrula: geçersiz istek boş satıcı bırakmasın
     const m = b.id ? merchantOf(b.id) : S.merchants[S.merchants.push({ id: id() }) - 1];
-    Object.assign(m, { name: text(b.name), emoji: String(b.emoji ?? m.emoji ?? '').trim().slice(0, 8), type: b.type });
+    Object.assign(m, { name, emoji: String(b.emoji ?? m.emoji ?? '').trim().slice(0, 8), type: b.type });
   },
   item(b) {
     merchantOf(b.merchantId);
@@ -495,6 +497,16 @@ const D = {
     S.dm = [a.tok]; // bu oturum dışındaki DM oturumları kapanır
     for (const c of clients) if (c.role === 'dm' && c.tok !== a.tok) { try { c.res.end(); } catch {} clients.delete(c); }
     log('DM şifresi değiştirildi');
+  },
+  reset(b, a) { // yalnızca test (DEV_RESET=1): dünyayı sıfırlar, çağıran DM oturumu kalır
+    if (!DEV_RESET) fail('Yok', 404);
+    for (const k of Object.keys(S)) delete S[k];
+    Object.assign(S, seed(), { ledger: [], affinity: {}, affinityWeek: {}, settings: {} });
+    S.dm = [a.tok]; pinFails.clear(); FIXED = null; fixedI = 0;
+  },
+  dice(b) { // yalnızca test: sonraki zarları belirler, örn. {seq:[20,1]}; seq yoksa gerçek rastgele
+    if (!DEV_RESET) fail('Yok', 404);
+    FIXED = Array.isArray(b.seq) && b.seq.length ? b.seq.map(Number) : null; fixedI = 0;
   },
   newday() { S.day += 1; S.negs = {}; S.bans = {}; log(`Yeni gün: ${S.day}`); },
   line(b) {
