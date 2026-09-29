@@ -62,7 +62,7 @@ async function withServer(port, dice, fn) {
     const pc = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
     const dc = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
     const p = await pc.newPage(), d = await dc.newPage();
-    d.on('dialog', (x) => x.accept()); p.on('dialog', (x) => x.accept());
+    d.on('dialog', (x) => x.accept(x.defaultValue())); p.on('dialog', (x) => x.accept(x.defaultValue()));
     await p.goto(url); await p.click('[data-pick=barbar]'); await p.fill('#name', 'Bora'); await p.click('#go');
     await d.goto(url); await d.click('#dm'); await d.fill('#pin', '4321'); await d.click('#dmgo');
     await p.click('[data-mid=m3]'); await p.click('text=Ejder Pulu');
@@ -74,6 +74,31 @@ async function withServer(port, dice, fn) {
     await p.waitForSelector('text=Bugün kapalı');
     await d.click('[data-act=newday]');
     await p.waitForFunction(() => !document.body.textContent.includes('Bugün kapalı'));
+    await pc.close(); await dc.close();
+  });
+
+  // 3) CRM: teklif bırak → DM karşı teklif → oyuncu kabul → Haftalık Pazar teslim
+  await withServer(3113, '10', async (url) => {
+    const pc = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true });
+    const dc = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+    const p = await pc.newPage(), d = await dc.newPage();
+    const errs = []; for (const pg of [p, d]) pg.on('pageerror', (e) => errs.push(e.message));
+    d.on('dialog', (x) => x.accept(x.defaultValue())); p.on('dialog', (x) => x.accept(x.defaultValue()));
+    await p.goto(url); await p.click('[data-pick=ozan]'); await p.fill('#name', 'Cem'); await p.click('#go');
+    await d.goto(url); await d.click('#dm'); await d.fill('#pin', '4321'); await d.click('#dmgo');
+    await p.click('[data-tab=bids]'); await p.click('[data-act=bidnew]');
+    await p.selectOption('#f-m', 'm2'); await p.selectOption('#f-i', { label: 'Uzun Kılıç · 15 gp' });
+    await p.fill('#f-price', '9'); await p.fill('#f-note', 'Pazar günü alırım'); await shot(p, '10-bid-form');
+    await p.click('[data-act=bidsend]'); await p.waitForSelector('text=DM bekleniyor');
+    await d.click('[data-dtab=bids]'); await d.waitForSelector('text=Pazar günü alırım'); await shot(d, '11-dm-bids');
+    await d.click('[data-dcnt]');                                   // kural önerisi 10.5 ile karşı teklif
+    await p.waitForSelector('text=Cevap sende'); await shot(p, '12-counter');
+    await p.click('[data-bacc]'); await p.waitForSelector('text=Pazar gününde teslim');
+    await d.click('[data-bf=accepted]'); await d.click('[data-act=weekly]');
+    await p.waitForSelector('text=Teslim edildi');
+    await p.click('[data-tab=bag]'); await p.waitForSelector('text=Uzun Kılıç');
+    assert.match(await p.textContent('.pill.gold'), /69\.5/);
+    assert.deepEqual(errs, []);
     await pc.close(); await dc.close();
   });
   await b.close();

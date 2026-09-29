@@ -29,7 +29,7 @@ function seed() {
   ];
   const it = (mid, name, price, magical = false, stock = null) => ({ id: id(), merchantId: mid, name, price, magical, stock });
   return {
-    day: 1, merchants: m,
+    day: 1, week: 1, offers: [], merchants: m,
     items: [
       it('m1', 'İyileştirme İksiri', 50), it('m1', 'İp (15 m)', 1), it('m1', 'Çadır', 2),
       it('m2', 'Uzun Kılıç', 15), it('m2', 'Zincir Zırh', 75), it('m2', 'Hırsız Aletleri', 25),
@@ -40,6 +40,7 @@ function seed() {
 }
 let S;
 try { S = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { S = seed(); }
+S.offers ||= []; S.week ||= 1;
 let saveT;
 function save() {
   clearTimeout(saveT);
@@ -85,6 +86,17 @@ function grant(p, item, paid, damaged) {
   delete S.negs[nkey(p.id, item.id)];
 }
 
+// ---------- teklifler (CRM) ----------
+const OPEN = ['new', 'counter', 'accepted'];
+const hist = (o, who, act, price, note) => o.history.push({ t: Date.now(), who, act, price, note: note || '' });
+const noteOf = (v) => String(v ?? '').trim().slice(0, 80);
+function checkBid(item, price) {
+  if (price >= item.price) fail('Etiketten düşük teklif ver.');
+  if (price < item.price * E.MIN_RATIO) fail('En az etiket fiyatının %25\'i olmalı.');
+}
+const offerOf = (oid) => S.offers.find((o) => o.id === oid) || fail('Teklif yok', 404);
+const offerView = (o) => { const it = o.itemId && S.items.find((i) => i.id === o.itemId); return { ...o, listPrice: it ? it.price : null }; };
+
 // ---------- görünümler ----------
 function playerView(p) {
   const negs = {};
@@ -95,7 +107,8 @@ function playerView(p) {
     negs[i.id] = { status: n.status, price: n.price, lastY: n.lastY, mood: E.moodOf(n, m.type), line: n.line, history: n.history.slice(-3).map(({ y, approach, rolls, roll, bonus, total, outcome }) => ({ y, approach, rolls, roll, bonus, total, outcome })) };
   }
   return {
-    role: 'player', day: S.day, dmOnline: dmOnline(),
+    role: 'player', day: S.day, week: S.week, dmOnline: dmOnline(),
+    bids: S.offers.filter((o) => o.playerId === p.id).map(offerView),
     me: { id: p.id, name: p.name, charId: p.charId, gold: p.gold, advantage: p.advantage, inventory: p.inventory },
     merchants: S.merchants.map((m) => ({
       id: m.id, name: m.name, emoji: m.emoji, banned: isBanned(p.id, m.id),
@@ -108,7 +121,7 @@ function playerView(p) {
 }
 function dmView() {
   return {
-    role: 'dm', day: S.day, chars: CHARS.map((c) => c.id),
+    role: 'dm', day: S.day, week: S.week, bids: S.offers.map(offerView), chars: CHARS.map((c) => c.id),
     merchants: S.merchants, items: S.items, log: S.log.slice(-40),
     players: S.players.map((p) => ({ id: p.id, name: p.name, charId: p.charId, gold: p.gold, advantage: p.advantage, inventory: p.inventory })),
     negs: Object.entries(S.negs).map(([k, n]) => {
@@ -159,6 +172,36 @@ const P = {
     grant(p, item, paid, true);
     log(`${p.name} HARD GAMBLE: ${item.name} · ${gp(paid)} (${m.name}) · kusurlu`, p.id);
   },
+  bid(p, b) {
+    const m = merchantOf(b.merchantId);
+    const item = b.itemId ? itemOf(b.itemId) : null;
+    if (item && item.merchantId !== m.id) fail('Eşya bu satıcıda yok.');
+    const price = num(b.price, 0.01);
+    if (item) checkBid(item, price);
+    if (S.offers.filter((o) => o.playerId === p.id && OPEN.includes(o.status)).length >= 10) fail('En fazla 10 açık teklif.');
+    const o = { id: id(), playerId: p.id, merchantId: m.id, itemId: item ? item.id : null, itemName: item ? item.name : text(b.itemName), price, note: noteOf(b.note), from: 'player', by: 'player', status: 'new', week: S.week, t: Date.now(), history: [] };
+    hist(o, 'player', 'teklif', price, o.note);
+    S.offers.push(o);
+    log(`📨 ${p.name} → ${m.name}: ${o.itemName} için ${gp(price)} teklif`, p.id);
+  },
+  bidreply(p, b) {
+    const o = offerOf(b.id);
+    if (o.playerId !== p.id) fail('Bu senin teklifin değil', 403);
+    const it = o.itemId && S.items.find((i) => i.id === o.itemId);
+    if (b.action === 'accept') {
+      if (o.status !== 'counter') fail('Kabul edilecek karşı teklif yok.');
+      o.status = 'accepted'; hist(o, 'player', 'kabul', o.price);
+    } else if (b.action === 'counter') {
+      if (o.status !== 'counter') fail('Karşı teklif yok.');
+      const price = num(b.price, 0.01);
+      if (it) checkBid(it, price);
+      o.price = price; o.by = 'player'; o.status = 'new'; hist(o, 'player', 'teklif', price, noteOf(b.note));
+    } else if (b.action === 'withdraw') {
+      if (!OPEN.includes(o.status)) fail('Bu teklif kapalı.');
+      o.status = 'withdrawn'; hist(o, 'player', 'geri çekti', o.price);
+    } else fail('Bilinmeyen işlem');
+    log(`📨 ${p.name}: ${o.itemName} teklifi → ${o.status}`, p.id);
+  },
   insight(p, b) {
     const m = merchantOf(b.merchantId), key = bkey(p.id, m.id);
     if (S.revealed[key]) return;
@@ -195,6 +238,49 @@ const D = {
     const p = playerOf(b.id);
     if (b.gold !== undefined) p.gold = num(b.gold);
     if (b.advantage !== undefined) p.advantage = !!b.advantage;
+  },
+  bidreply(b) {
+    const o = offerOf(b.id), it = o.itemId && S.items.find((i) => i.id === o.itemId), note = noteOf(b.note);
+    if (!OPEN.includes(o.status)) fail('Bu teklif kapalı.');
+    if (b.action === 'accept') {
+      if (o.status === 'accepted') fail('Zaten kabul edildi.');
+      o.status = 'accepted'; hist(o, 'dm', 'kabul', o.price, note);
+    } else if (b.action === 'counter') {
+      const price = num(b.price, 0.01);
+      if (it) checkBid(it, price);
+      o.price = price; o.by = 'dm'; o.status = 'counter'; hist(o, 'dm', 'karşı teklif', price, note);
+    } else if (b.action === 'reject') {
+      o.status = 'rejected'; hist(o, 'dm', 'reddetti', o.price, note);
+    } else fail('Bilinmeyen işlem');
+    o.dmNote = note || o.dmNote || '';
+  },
+  bidsend(b) {
+    const p = playerOf(b.playerId), it = itemOf(b.itemId), price = num(b.price, 0.01);
+    checkBid(it, price);
+    const o = { id: id(), playerId: p.id, merchantId: it.merchantId, itemId: it.id, itemName: it.name, price, note: noteOf(b.note), from: 'dm', by: 'dm', status: 'counter', week: S.week, t: Date.now(), history: [] };
+    hist(o, 'dm', 'teklif gönderdi', price, o.note);
+    S.offers.push(o);
+    log(`📨 ${merchantOf(it.merchantId).name} → ${p.name}: ${it.name} için ${gp(price)} teklif`, p.id);
+  },
+  weekly() {
+    const done = [];
+    for (const o of S.offers.filter((x) => x.status === 'accepted').sort((a, b) => a.t - b.t)) {
+      const p = S.players.find((x) => x.id === o.playerId), it = o.itemId && S.items.find((i) => i.id === o.itemId);
+      let why = null;
+      if (!p) why = 'Oyuncu yok';
+      else if (o.itemId && !it) why = 'Eşya kalmadı';
+      else if (it && it.stock !== null && it.stock <= 0) why = 'Tükendi';
+      else if (p.gold < o.price) why = 'Altın yetmedi';
+      if (why) { o.status = 'failed'; o.reason = why; hist(o, 'dm', 'teslim olmadı', o.price, why); continue; }
+      p.gold = E.round(p.gold - o.price);
+      p.inventory.push({ id: id(), itemId: o.itemId, name: o.itemName, paid: o.price, damaged: false, magical: it ? it.magical : false });
+      if (it && it.stock !== null) it.stock -= 1;
+      o.status = 'settled'; hist(o, 'dm', 'teslim edildi', o.price);
+      done.push(o);
+    }
+    S.week += 1;
+    D.newday();
+    log(`🎪 Haftalık Pazar: ${done.length} teslimat, yeni hafta ${S.week}`);
   },
   newday() { S.day += 1; S.negs = {}; S.bans = {}; log(`Yeni gün: ${S.day}`); },
   line(b) {

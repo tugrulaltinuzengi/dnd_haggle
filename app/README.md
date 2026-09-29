@@ -32,6 +32,16 @@ Oyuncu sayı görmez: satıcının sabrı sadece 😊 😐 😠 😡, DC hiç g�
 - **👥 Oyuncular:** altın ver/al, ⭐ avantaj ver (bir sonraki zar iki kez atılır, yükseği sayılır).
 - **Yeni Gün 🌅:** pazarlıkları ve Rep 0 yasaklarını sıfırlar.
 
+## Teklifler — haftalık pazar (CRM gibi)
+Pazarlık anlık zarla, teklif ise **hafta boyunca bırakılan yazılı iş**. Her teklifin bir aşaması ve geçmişi var.
+
+**Aşamalar:** ⏳ Yeni (DM bekleniyor) → ↩️ Karşı teklif (cevap oyuncuda) → ✅ Anlaşıldı (Pazar gününde teslim) → 📦 Teslim edildi. Kapananlar: 🚫 Reddedildi, ↩ Geri çekildi, ⚠️ Teslim olmadı.
+
+- **Oyuncu** (📨 Teklif sekmesi): satıcı + eşya (ya da ✍️ *özel istek*, katalogda olmayan) + fiyat + not. DM karşı teklif verirse Kabul, Karşı ya da Geri çek.
+- **DM** (📨 Teklif sekmesi): Yeni / Karşı / Anlaşıldı / Kapalı filtreleri. **Kabul**, **Karşı teklif** (kural önerisiyle: Y + a·u/2), **Reddet**, hepsine not yazılabilir. 👥 Kişi ekranındaki **📨 Teklif** düğmesiyle DM de oyuncuya teklif gönderir.
+- **Haftalık Pazar 🎪** (DM): anlaşılan tüm teklifleri teslim eder (altın düşer, eşya çantaya girer, stok azalır). Altın yetmezse ya da eşya tükenmişse ⚠️ *Teslim olmadı* olur. Hafta ve gün ilerler, pazarlıklar ve Rep 0 yasakları sıfırlanır. Cevap bekleyen açık teklifler bir sonraki haftaya kalır.
+- Katalog eşyasında teklif etiketin altında ve en az %25'i olmalı. Bir oyuncunun en fazla 10 açık teklifi olabilir. Teklifte zar yok, kararı DM verir.
+
 ## Kurallar (DM Paketi'nden)
 | | Cömert | Nötr | Açgözlü |
 |---|---|---|---|

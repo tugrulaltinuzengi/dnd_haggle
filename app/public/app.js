@@ -9,7 +9,8 @@ const OUT = { crit: ['🎯 Kritik!', 'Teklifin aynen kabul.'], success: ['✅ Ba
 
 let CH = [], S = null, auth = store.get(), es = null;
 let view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false };
-let pick = null, dmTab = 'live', toastT;
+let pick = null, dmTab = 'live', toastT, dmFilter = 'new';
+view.f = { mid: null, iid: '', name: '', price: '', note: '' };
 
 function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2500); }
 async function api(path, body) {
@@ -30,7 +31,7 @@ function connect() {
     if (r) { auth = null; store.set(null); S = null; render(); } // sunucu ayakta ama token geçersiz
   };
 }
-function logout() { if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion' }; render(); }
+function logout() { if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', f: { mid: null, iid: '', name: '', price: '', note: '' } }; render(); }
 
 // ---------- giriş ----------
 function renderJoin() {
@@ -58,13 +59,14 @@ const chr = (id) => CH.find((c) => c.id === id);
 
 function renderPlayer() {
   const me = S.me, c = chr(me.charId) || { emoji: '🧑', name: '' };
-  const head = `<div class="top"><span class="pill">${c.emoji} ${esc(me.name)}</span><span class="pill gold">🪙 ${fmt(me.gold)}</span><span class="pill" title="Gün">☀️ ${S.day}${me.advantage ? ' ⭐' : ''}</span></div>`;
+  const head = `<div class="top"><span class="pill">${c.emoji} ${esc(me.name)}</span><span class="pill gold">🪙 ${fmt(me.gold)}</span><span class="pill" title="Hafta / Gün">🎪 ${S.week} · ☀️ ${S.day}${me.advantage ? ' ⭐' : ''}</span></div>`;
   let body;
   if (view.iid) body = renderNegotiation(me);
   else if (view.tab === 'bag') body = renderBag(me);
+  else if (view.tab === 'bids') body = renderBids(me);
   else if (view.mid) body = renderItems();
   else body = renderMarket();
-  const tabs = view.iid ? '' : `<nav class="tabs"><button data-tab="market" class="${view.tab === 'market' ? 'on' : ''}">🏪 Pazar</button><button data-tab="bag" class="${view.tab === 'bag' ? 'on' : ''}">🎒 Çanta (${me.inventory.length})</button><button data-act="logout">🚪</button></nav>`;
+  const tabs = view.iid ? '' : `<nav class="tabs"><button data-tab="market" class="${view.tab === 'market' ? 'on' : ''}">🏪 Pazar</button><button data-tab="bids" class="${view.tab === 'bids' ? 'on' : ''}">📨 Teklif${S.bids.some((b) => b.status === 'counter') ? ' 🔴' : ''}</button><button data-tab="bag" class="${view.tab === 'bag' ? 'on' : ''}">🎒 Çanta${me.inventory.length ? ' ' + me.inventory.length : ''}</button><button data-act="logout">🚪</button></nav>`;
   $app.innerHTML = head + (S.dmOnline ? '' : '<p class="hint">DM şu an çevrimdışı. Pazar yine de açık.</p>') + body + tabs;
 }
 function renderMarket() {
@@ -84,6 +86,32 @@ function renderItems() {
 function renderBag(me) {
   return `<h2>Çanta</h2><div class="list">${me.inventory.map((i) => `
     <div class="card row"><span class="grow"><b>${esc(i.name)}</b>${i.damaged ? '<span class="tag bad">🩹 Kusurlu · satılamaz (0 gp)</span>' : ''}</span><span class="price">${fmt(i.paid)} gp</span></div>`).join('') || '<p class="empty">Çantan boş.</p>'}</div>`;
+}
+const BST = { new: ['⏳', 'DM bekleniyor'], counter: ['↩️', 'Cevap sende'], accepted: ['✅', 'Pazar gününde teslim'], rejected: ['🚫', 'Reddedildi'], withdrawn: ['↩', 'Geri çekildi'], settled: ['📦', 'Teslim edildi'], failed: ['⚠️', 'Teslim olmadı'] };
+const isOpen = (o) => ['new', 'counter', 'accepted'].includes(o.status);
+function histLine(o) {
+  const h = o.history[o.history.length - 1];
+  return h && h.note ? `<small>💬 ${esc(h.note)}</small>` : '';
+}
+function renderBids(me) {
+  const f = view.f;
+  if (!S.merchants.find((m) => m.id === f.mid)) f.mid = S.merchants[0] && S.merchants[0].id;
+  const m = mer(f.mid);
+  const form = view.form ? `<div class="offer">
+      <select id="f-m">${S.merchants.map((x) => `<option value="${x.id}" ${x.id === f.mid ? 'selected' : ''}>${x.emoji} ${esc(x.name)}</option>`).join('')}</select>
+      <select id="f-i" style="margin-top:8px"><option value="">✍️ Özel istek…</option>${(m ? m.items : []).map((i) => `<option value="${i.id}" ${i.id === f.iid ? 'selected' : ''}>${esc(i.name)} · ${fmt(i.price)} gp</option>`).join('')}</select>
+      ${f.iid ? '' : `<input type="text" id="f-name" maxlength="40" placeholder="Ne istiyorsun?" value="${esc(f.name)}" style="margin-top:8px">`}
+      <input type="number" id="f-price" inputmode="decimal" step="0.01" min="0" placeholder="Teklifin (gp)" value="${esc(f.price)}" style="margin-top:8px">
+      <input type="text" id="f-note" maxlength="80" placeholder="Not (isteğe bağlı)" value="${esc(f.note)}" style="margin-top:8px">
+      <button class="btn" data-act="bidsend">📨 Gönder</button><button class="btn ghost" data-act="bidcancel">Vazgeç</button></div>`
+    : '<button class="btn" data-act="bidnew">+ Yeni Teklif</button>';
+  const bids = S.bids.slice().sort((a, b) => (isOpen(b) - isOpen(a)) || b.t - a.t);
+  return `<h2>Haftalık Pazar 🎪 ${S.week}</h2><p class="hint" style="text-align:left;margin-top:0">Teklif bırak, DM cevaplasın. Anlaşılanlar Haftalık Pazar'da teslim edilir.</p>${form}
+    <div class="list" style="margin-top:12px">${bids.map((o) => { const mm = mer(o.merchantId) || { emoji: '🧑', name: '?' }; const st = BST[o.status]; return `
+      <div class="card" style="text-align:left"><div class="row"><b class="grow">${esc(o.itemName)}</b><span class="tag">${st[0]} ${st[1]}</span></div>
+        <small>${mm.emoji} ${esc(mm.name)} · ${o.by === 'dm' ? 'satıcı teklifi' : 'teklifin'} <b class="gold">${fmt(o.price)} gp</b>${o.listPrice ? ` · etiket ${fmt(o.listPrice)}` : ''}</small>${histLine(o)}${o.reason ? `<small class="tag bad">${esc(o.reason)}</small>` : ''}
+        ${o.status === 'accepted' && me.gold < o.price ? '<small class="tag bad">⚠️ Altının yetmiyor</small>' : ''}
+        ${isOpen(o) ? `<div class="tl">${o.status === 'counter' ? `<button class="btn sm ok" data-bacc="${o.id}">Kabul</button><button class="btn sm" data-bcnt="${o.id}">Karşı</button>` : ''}<button class="btn sm ghost" data-bwd="${o.id}">Geri çek</button></div>` : ''}</div>`; }).join('') || '<p class="empty">Henüz teklif yok.</p>'}</div>`;
 }
 function currentItem() {
   for (const m of S.merchants) { const i = m.items.find((x) => x.id === view.iid); if (i) return { m, i }; }
@@ -127,8 +155,8 @@ const ST_TR = { open: 'sürüyor', deal: 'anlaşıldı', angered: 'kapandı' };
 const TYPE_LABEL = { comert: 'Cömert', notr: 'Nötr', acgozlu: 'Açgözlü' };
 
 function renderDM() {
-  const tabs = `<nav class="tabs">${[['live', '⚔️ Canlı'], ['market', '🏪 Pazar'], ['players', '👥 Oyuncular']].map(([k, l]) => `<button data-dtab="${k}" class="${dmTab === k ? 'on' : ''}">${l}</button>`).join('')}<button data-act="logout">🚪</button></nav>`;
-  const head = `<div class="top"><span class="pill">🎲 DM</span><span class="pill">☀️ Gün ${S.day}</span><button class="btn sm ghost" data-act="newday">Yeni Gün 🌅</button></div>`;
+  const tabs = `<nav class="tabs">${[['live', '⚔️ Canlı'], ['bids', `📨 Teklif${S.bids.filter((b) => b.status === 'new').length ? ' 🔴' : ''}`], ['market', '🏪 Pazar'], ['players', '👥 Kişi']].map(([k, l]) => `<button data-dtab="${k}" class="${dmTab === k ? 'on' : ''}">${l}</button>`).join('')}<button data-act="logout">🚪</button></nav>`;
+  const head = `<div class="top"><span class="pill">🎲 DM</span><span class="pill">🎪 ${S.week} · ☀️ ${S.day}</span><button class="btn sm ghost" data-act="newday">Yeni Gün 🌅</button></div>`;
   let body = '';
   if (dmTab === 'live') {
     const negs = S.negs.filter((n) => n.last).reverse();
@@ -138,6 +166,17 @@ function renderDM() {
         ${n.line ? `<small>💬 ${esc(n.line)}</small>` : ''}
         <div class="tl"><button class="btn sm ghost" data-line="${n.playerId}|${n.itemId}|Olmaz!">Olmaz!</button><button class="btn sm ghost" data-line="${n.playerId}|${n.itemId}|Son fiyat.">Son fiyat.</button><button class="btn sm ghost" data-lineask="${n.playerId}|${n.itemId}">💬</button><button class="btn sm" data-price="${n.playerId}|${n.itemId}">Fiyat</button></div></div>`).join('') || '<p class="empty">Henüz pazarlık yok.</p>'}</div>
       <h2>Akış</h2>${S.log.slice().reverse().map((l) => `<div class="feed">${esc(l.text)}</div>`).join('')}`;
+  } else if (dmTab === 'bids') {
+    const G = { new: ['new'], counter: ['counter'], accepted: ['accepted'], closed: ['rejected', 'withdrawn', 'settled', 'failed'] };
+    const LBL = { new: 'Yeni', counter: 'Karşı', accepted: 'Anlaşıldı', closed: 'Kapalı' };
+    const cnt = (k) => S.bids.filter((b) => G[k].includes(b.status)).length;
+    const list = S.bids.filter((b) => G[dmFilter].includes(b.status)).sort((a, b) => b.t - a.t);
+    body = `<button class="btn" data-act="weekly">Haftalık Pazar 🎪 (${cnt('accepted')} teslimat)</button>
+      <div class="seg" style="margin-top:12px">${Object.keys(G).map((k) => `<button class="${dmFilter === k ? 'on' : ''}" data-bf="${k}">${LBL[k]} ${cnt(k)}</button>`).join('')}</div>
+      <div class="list">${list.map((o) => { const mm = S.merchants.find((x) => x.id === o.merchantId) || { emoji: '🧑', name: '?', type: 'notr' }; const st = BST[o.status];
+        return `<div class="card dm-neg"><div class="hd"><span>${pname(o.playerId)} → ${esc(o.itemName)}</span><span class="tag">${st[0]} ${st[1]}</span></div>
+          <small>${mm.emoji} ${esc(mm.name)} · ${o.by === 'dm' ? 'satıcı teklifi' : 'oyuncu teklifi'} <b class="gold">${fmt(o.price)}</b>${o.listPrice ? ` · etiket ${fmt(o.listPrice)} (%${Math.round(o.price / o.listPrice * 100)})` : ''} · hafta ${o.week}</small>${histLine(o)}${o.reason ? `<small class="tag bad">${esc(o.reason)}</small>` : ''}
+          ${['new', 'counter', 'accepted'].includes(o.status) ? `<div class="tl">${o.status === 'new' ? `<button class="btn sm ok" data-dacc="${o.id}">Kabul</button>` : ''}<button class="btn sm" data-dcnt="${o.id}">Karşı teklif</button><button class="btn sm ghost" data-drej="${o.id}">Reddet</button></div>` : ''}</div>`; }).join('') || '<p class="empty">Bu listede teklif yok.</p>'}</div>`;
   } else if (dmTab === 'market') {
     body = `<button class="btn sm" data-act="addm">+ Satıcı</button>` + S.merchants.map((m) => `
       <div class="card" style="text-align:left;margin-top:10px"><div class="row"><span class="em">${esc(m.emoji)}</span><b class="grow">${esc(m.name)}</b><button class="btn sm ghost" data-editm="${m.id}">✏️</button><button class="btn sm ghost" data-del="merchant|${m.id}">🗑️</button></div>
@@ -148,20 +187,29 @@ function renderDM() {
     body = `<h2>Oyuncular</h2><div class="list">${S.players.map((p) => `
       <div class="card" style="text-align:left"><div class="row"><span class="em">${(chr(p.charId) || {}).emoji || ''}</span><span class="grow"><b>${esc(p.name)}</b><small>🎒 ${p.inventory.length} eşya</small></span><span class="price">🪙 ${fmt(p.gold)}</span></div>
         <div class="tl"><button class="btn sm ghost" data-gold="${p.id}|-10">−10</button><button class="btn sm ghost" data-gold="${p.id}|10">+10</button><button class="btn sm ghost" data-gold="${p.id}|100">+100</button><button class="btn sm ghost" data-goldset="${p.id}">Ayarla</button></div>
-        <div class="tl"><button class="btn sm ${p.advantage ? '' : 'ghost'}" data-adv="${p.id}|${p.advantage ? 0 : 1}">⭐ Avantaj ${p.advantage ? 'AÇIK' : 'ver'}</button><button class="btn sm ghost" data-del="player|${p.id}">🗑️</button></div></div>`).join('') || '<p class="empty">Kimse yok.</p>'}</div>`;
+        <div class="tl"><button class="btn sm ${p.advantage ? '' : 'ghost'}" data-adv="${p.id}|${p.advantage ? 0 : 1}">⭐ Avantaj ${p.advantage ? 'AÇIK' : 'ver'}</button><button class="btn sm ghost" data-sendbid="${p.id}">📨 Teklif</button><button class="btn sm ghost" data-del="player|${p.id}">🗑️</button></div></div>`).join('') || '<p class="empty">Kimse yok.</p>'}</div>`;
   }
   $app.innerHTML = head + body + tabs;
 }
 
 // ---------- render ----------
 function render() {
-  if (!auth) return pick === 'DM' ? renderDMLogin() : renderJoin();
-  if (!S) return void ($app.innerHTML = '<p class="empty">Bağlanıyor…</p>');
-  return S.role === 'dm' ? renderDM() : renderPlayer();
+  const ae = document.activeElement, keep = ae && ae.id && $app.contains(ae) ? { id: ae.id, a: ae.selectionStart, b: ae.selectionEnd } : null;
+  if (!auth) pick === 'DM' ? renderDMLogin() : renderJoin();
+  else if (!S) $app.innerHTML = '<p class="empty">Bağlanıyor…</p>';
+  else if (S.role === 'dm') renderDM(); else renderPlayer();
+  if (keep) { const el = document.getElementById(keep.id); if (el) { el.focus(); try { el.setSelectionRange(keep.a, keep.b); } catch {} } }
 }
 
 // ---------- olaylar ----------
+$app.addEventListener('change', (e) => {
+  const f = view.f;
+  if (e.target.id === 'f-m') { f.mid = e.target.value; f.iid = ''; render(); }
+  if (e.target.id === 'f-i') { f.iid = e.target.value; render(); }
+});
 $app.addEventListener('input', (e) => {
+  const f = view.f, k = { 'f-name': 'name', 'f-price': 'price', 'f-note': 'note' }[e.target.id];
+  if (k) f[k] = e.target.value;
   if (e.target.id === 'yr') { view.y = +e.target.value; const n = document.getElementById('ynum'); if (n) n.textContent = fmt(view.y); }
 });
 $app.addEventListener('click', async (e) => {
@@ -183,6 +231,25 @@ $app.addEventListener('click', async (e) => {
   if (d.step) { const r = document.getElementById('yr'); const st = Math.max(0.01, Math.round(+r.max / 50 * 100) / 100); view.y = Math.min(+r.max, Math.max(+r.min, Math.round((view.y + (+d.step) * st) * 100) / 100)); return render(); }
   if (d.ap) { view.approach = d.ap; return render(); }
   if (d.dtab) { dmTab = d.dtab; return render(); }
+  if (d.bf) { dmFilter = d.bf; return render(); }
+  if (d.bacc) return void act('bidreply', { id: d.bacc, action: 'accept' });
+  if (d.bwd) return void act('bidreply', { id: d.bwd, action: 'withdraw' });
+  if (d.bcnt) { const o = S.bids.find((x) => x.id === d.bcnt); const v = prompt('Karşı teklifin (gp):', fmt(o.price)); return void (v && act('bidreply', { id: o.id, action: 'counter', price: v })); }
+  if (d.dacc) { const n = prompt('Not (isteğe bağlı):', ''); return void (n !== null && act('dm/bidreply', { id: d.dacc, action: 'accept', note: n })); }
+  if (d.drej) { const n = prompt('Red nedeni (isteğe bağlı):', ''); return void (n !== null && act('dm/bidreply', { id: d.drej, action: 'reject', note: n })); }
+  if (d.dcnt) {
+    const o = S.bids.find((x) => x.id === d.dcnt), m = S.merchants.find((x) => x.id === o.merchantId), X = o.listPrice;
+    const u = { comert: 0.5, notr: 1, acgozlu: 1.5 }[m && m.type] || 1;
+    const sug = X ? Math.round((o.price + ((X - o.price) / 2) * (u / 2)) * 100) / 100 : o.price;
+    const v = prompt(X ? `Karşı teklif (gp). Kural önerisi: ${fmt(sug)}` : 'Karşı teklif (gp):', fmt(sug)); if (!v) return;
+    const n = prompt('Not (isteğe bağlı):', ''); return void (n !== null && act('dm/bidreply', { id: o.id, action: 'counter', price: v, note: n }));
+  }
+  if (d.sendbid) {
+    const list = S.items.map((i, k) => { const m = S.merchants.find((x) => x.id === i.merchantId); return `${k + 1}) ${i.name} – ${m ? m.name : '?'} (${fmt(i.price)})`; }).join('\n');
+    const k = parseInt(prompt(list + '\n\nEşya numarası:'), 10), it = S.items[k - 1]; if (!it) return;
+    const price = prompt('Teklif fiyatı (gp):', fmt(Math.round(it.price * 80) / 100)); if (!price) return;
+    const note = prompt('Not (isteğe bağlı):', ''); return void (note !== null && act('dm/bidsend', { playerId: d.sendbid, itemId: it.id, price, note }));
+  }
   if (d.line) { const [p, i, txt] = d.line.split('|'); return void act('dm/line', { playerId: p, itemId: i, text: txt }); }
   if (d.lineask) { const [p, i] = d.lineask.split('|'); const v = prompt('Satıcı ne desin?'); return void (v && act('dm/line', { playerId: p, itemId: i, text: v })); }
   if (d.price) { const [p, i] = d.price.split('|'); const v = prompt('Yeni fiyat (gp):'); return void (v && act('dm/setprice', { playerId: p, itemId: i, price: v })); }
@@ -198,6 +265,14 @@ $app.addEventListener('click', async (e) => {
     case 'logout': return logout();
     case 'up': if (view.iid) view.iid = null; else view.mid = null; return render();
     case 'newday': if (confirm('Yeni gün: tüm pazarlıklar ve yasaklar sıfırlanır.')) act('dm/newday'); return;
+    case 'bidnew': view.form = true; return render();
+    case 'bidcancel': view.form = false; return render();
+    case 'bidsend': {
+      const f = view.f;
+      try { await api('bid', { merchantId: f.mid, itemId: f.iid || null, itemName: f.name, price: f.price, note: f.note }); view.form = false; view.f = { mid: f.mid, iid: '', name: '', price: '', note: '' }; toast('Teklif gönderildi 📨'); render(); } catch {}
+      return;
+    }
+    case 'weekly': { const n = S.bids.filter((b) => b.status === 'accepted').length; if (confirm(`Haftalık Pazar: ${n} anlaşma teslim edilir, yeni hafta başlar (pazarlıklar ve yasaklar sıfırlanır). Açık teklifler kalır.`)) act('dm/weekly'); return; }
     case 'addm': { const name = prompt('Satıcı adı:'); if (!name) return; const emoji = prompt('Emoji:', '🧑') || '🧑'; return void act('dm/merchant', { name, emoji, type: 'notr' }); }
     case 'offer': {
       view.rolling = true; render();
