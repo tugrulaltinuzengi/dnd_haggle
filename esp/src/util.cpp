@@ -88,7 +88,7 @@ String textStr(const String& in, size_t max) {
 String textOf(JsonVariantConst v, size_t max) {
   String s = jsSlice(jsTrim(strOf(v)), max);
   s = jsTrim(s);
-  if (!s.length()) fail("Bo\xC5\x9F olamaz");
+  if (!s.length()) fail("Cannot be empty");
   return s;
 }
 

@@ -128,7 +128,7 @@ static String num(double v) {
 }
 static String q(const String& v) { String s = v; s.replace("\"", "\"\""); return "\"" + s + "\""; }
 static String ledgerCsv() {
-  String out = "\xEF\xBB\xBF" "zaman,hafta,gun,tur,oyuncu,satici,esya,tutar,etiket";
+  String out = "\xEF\xBB\xBF" "time,week,day,kind,player,merchant,item,amount,list";
   for (JsonObject e : S["ledger"].as<JsonArray>()) {
     JsonObject p = findBy(S["players"], "id", e["playerId"] | ""), m = e["merchantId"].isNull() ? JsonObject() : findBy(S["merchants"], "id", e["merchantId"]);
     out += '\n';
@@ -238,7 +238,7 @@ static void handleAll(AsyncWebServerRequest* r) {
       if (name == "address") { sendJson(r, 200, "{\"url\":\"http://192.168.4.1\"}"); return; }
       String csv; { Lock l; csv = ledgerCsv(); }
       AsyncWebServerResponse* res = r->beginResponse(200, "text/csv; charset=utf-8", csv);
-      res->addHeader("Content-Disposition", "attachment; filename=\"defter.csv\"");
+      res->addHeader("Content-Disposition", "attachment; filename=\"ledger.csv\"");
       r->send(res); return;
     }
     if (post && name == "media") {

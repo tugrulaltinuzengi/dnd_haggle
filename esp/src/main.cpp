@@ -22,6 +22,8 @@ void setup() {
     if (ev == ARDUINO_EVENT_WIFI_AP_STACONNECTED) Serial.printf("wifi: station connected %02x:%02x:%02x:%02x:%02x:%02x\n", info.wifi_ap_staconnected.mac[0], info.wifi_ap_staconnected.mac[1], info.wifi_ap_staconnected.mac[2], info.wifi_ap_staconnected.mac[3], info.wifi_ap_staconnected.mac[4], info.wifi_ap_staconnected.mac[5]);
     else if (ev == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) Serial.println("wifi: station left");
     else if (ev == ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED) Serial.printf("wifi: ip assigned %s\n", IPAddress(info.wifi_ap_staipassigned.ip.addr).toString().c_str());
+    else if (ev == ARDUINO_EVENT_WIFI_STA_GOT_IP) Serial.printf("wifi: home network ip %s\n", WiFi.localIP().toString().c_str());
+    else if (ev == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) { static uint32_t d; if (++d % 10 == 1) Serial.printf("wifi: home network disconnected (reason %d)\n", (int)info.wifi_sta_disconnected.reason); }
     else if (ev == ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED) { static uint32_t n; if (++n % 20 == 1) Serial.printf("wifi: probe request #%u\n", (unsigned)n); }
   });
   WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));

@@ -533,6 +533,10 @@ test('media: upload validation, storage, serving, clearing, DM only', T, async (
 test('media path traversal and unknown files are refused', T, async () => {
   for (const u of ['/media/../data.json', '/media/items/none.png', '/media/items/x.txt']) {
     const r = await fetch(W.base + u);
-    assert.ok([400, 403, 404].includes(r.status), `${u} -> ${r.status}`);
+    const text = await r.text();
+    // The ESP answers unknown pages with the app itself (captive portal), so 200 is fine as long as it is the app page and nothing private leaks.
+    const ok = [400, 403, 404].includes(r.status) || (r.status === 200 && text.includes('<title>Pazar</title>'));
+    assert.ok(ok, `${u} -> ${r.status}`);
+    assert.ok(!text.includes('"players"') && !text.includes('dmPass'), `${u} leaked state`);
   }
 });

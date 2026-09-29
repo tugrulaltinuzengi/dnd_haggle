@@ -1,0 +1,15 @@
+{
+  "name": "pazar-relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker that relays public HTTP to the ESP32 over a WebSocket it opens outward",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
