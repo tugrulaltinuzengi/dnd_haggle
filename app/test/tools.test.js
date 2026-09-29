@@ -87,3 +87,14 @@ test('backup: data ve media klasörlerini tgz olarak yazar', { skip }, () => {
   assert.match(list, /data\/data\.json/);
   assert.match(list, /media\/a\.png/);
 });
+
+test('depo denetimi: izlenen dosyalar arasında görsel yok (telif ve depo herkese açık)', () => {
+  const r = spawnSync('git', ['ls-files', '-z'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+  if (r.error || r.status !== 0) return; // git deposu değilse atla
+  const files = r.stdout.split('\0').filter(Boolean);
+  const images = files.filter((f) => /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(f));
+  assert.deepEqual(images, [], `depoya görsel girmiş: ${images.join(', ')}`);
+  const svgs = files.filter((f) => /\.svg$/i.test(f));
+  assert.deepEqual(svgs, ['public/icon.svg']); // yalnızca kendi uygulama simgemiz
+  assert.ok(!files.some((f) => /^(media|data)\//.test(f)), 'media/ ve data/ depoya girmemeli');
+});

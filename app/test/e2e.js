@@ -22,7 +22,7 @@ function makePng(w, h) {
 
 async function withServer(port, dice, fn) {
   const fs = require('fs'); const df = `${SP}/data-${port}.json`; try { fs.unlinkSync(df); } catch {}
-  const s = spawn('node', [SERVER], { env: { ...process.env, PORT: port, DM_PIN: '4321', DATA_FILE: df, DICE_FIXED: dice }, stdio: 'pipe' });
+  const s = spawn('node', [SERVER], { env: { ...process.env, PORT: port, DM_PIN: '4321', DATA_FILE: df, DICE_FIXED: dice, MEDIA_DIR: path.join(os.tmpdir(), `pazar-e2e-media-${port}`) }, stdio: 'pipe' });
   await new Promise((r) => s.stdout.on('data', r));
   try { await fn(`http://localhost:${port}`); } finally { s.kill(); }
 }

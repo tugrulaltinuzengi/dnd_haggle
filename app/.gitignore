@@ -3,9 +3,9 @@ data.json
 data-*.json
 
 # v2: telifli görseller depoya girmez (bkz. PROJE.md)
-app/media/
-app/tools/import-items/input/
-app/tools/import-items/output/
+media/
+tools/import-items/input/
+tools/import-items/output/
 *.pazarlib
 data/
 backups/

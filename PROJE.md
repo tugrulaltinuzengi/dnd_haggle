@@ -13,7 +13,7 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 
 **Şu anki sürüm: 0.11.** Ayrıntı Bölüm 12.
 
-**Çalışan:** kural motoru, canlı sunucu (DM + oyuncular, SSE), 6 karakter, pazarlık (zar, **Pazar** barı, Hard Gamble, Sez), **Yakınlık** sistemi (ayrı uzun vadeli bar), teklifler (CRM hattı) ve Haftalık Pazar, alışveriş defteri (filtre + CSV), karanlık tema, masaüstü düzeni, Tailscale araçları, PIN hız sınırı, yedek ve başlatma betikleri, Android WebView kabuğu ve **medya katmanı** (eşya görseli, satıcı portresi). 40 birim/API/araç testi ve 5 senaryolu tarayıcı testi geçiyor. Kod: [app/](app/), [android/](android/).
+**Çalışan:** kural motoru, canlı sunucu (DM + oyuncular, SSE), 6 karakter, pazarlık (zar, **Pazar** barı, Hard Gamble, Sez), **Yakınlık** sistemi (ayrı uzun vadeli bar), teklifler (CRM hattı) ve Haftalık Pazar, alışveriş defteri (filtre + CSV), karanlık tema, masaüstü düzeni, Tailscale araçları, PIN hız sınırı, yedek ve başlatma betikleri, Android WebView kabuğu ve **medya katmanı** (eşya görseli, satıcı portresi). 41 birim/API/araç testi ve 5 senaryolu tarayıcı testi geçiyor. Kod: [app/](app/), [android/](android/).
 
 **Bu turda (0.11):** medya katmanı (V2), ESP32 kararının planı, uyumluluk vektörleri, APK'da yalnızca `*.ts.net` için HTTP izni.
 
@@ -133,7 +133,7 @@ Ozan (İkna +6, Blöf +3, Gözdağı 0, 80 gp) · Hırsız (+2/+6/+2, 60 gp) · 
 ```bash
 cd app
 DM_PIN=1234 node server.js        # http://localhost:3000, bağımlılık yok (Node 18+); ya da ./start.sh, start.bat
-npm test                          # 40 birim/API/araç testi (vektör testi dahil)
+npm test                          # 41 birim/API/araç testi (vektör ve depo denetimi dahil)
 npm run e2e                       # tarayıcı testi: 5 senaryo (playwright gerekir)
 npm run vectors                   # kural motoru uyumluluk vektörlerini yeniden üretir (conformance/)
 npm run tailscale                 # Tailscale HTTPS yayını (Bölüm 7). --funnel: herkese açık, --stop: kapat
@@ -488,6 +488,7 @@ Kural: her commit'te ilgili girdi eklenir. Numara: **0.x** geliştirme sürümle
 
 ### 0.11 · medya katmanı ve ESP32 planı (bu commit)
 - **Kod:** **V2 medya katmanı:** DM eşya görseli (512 PNG + 128 küçük resim) ve satıcı portresi (768×512 JPEG) yükler, tarayıcıda kırpma ve yeniden kodlama, sunucuda sihirli bayt doğrulaması (yalnız PNG/JPEG, SVG reddedilir), boyut ve piksel sınırı, `/media` sunumu (yol atlatma engelli, `nosniff`), temizleme ve silmede dosya temizliği, oyuncu ekranında görsel/yazı kutusu. **Uyumluluk vektörleri** (`npm run vectors`, 688 vaka, `conformance/haggle-vectors.json`) olası bir ESP32 C++ portunu doğrulamak için. APK: yalnızca `*.ts.net` için HTTP izni (ağ güvenlik yapılandırması). Testler: 40 birim/API/araç + 5 senaryolu tarayıcı testi (görsel yükleme, doğru boyut, kaldırma dahil).
+- **Düzeltme (yakalanan hata):** `app/.gitignore` içindeki `app/media/` deseni yanlıştı (`app/app/media/` demek), tarayıcı testinin ürettiği yapay bir görsel (`m2.jpg`) commit'e girmişti. Dosya kaldırıldı, desenler düzeltildi (`media/`), e2e testi artık geçici klasöre yazıyor ve **`git ls-files` denetimi testte** (görsel uzantısı ve `media/`, `data/` yasak). Dosya 663e3f4 geçmişinde durur (yapay gradyan, telifli değil).
 - **Plan:** DM kararı: **sunucu PC'de değil, ESP32 üzerinde** (K20) ve iki ayrı bar teyit edildi. **Düzeltme:** önceki sürümlerde "ESP32'de Tailscale istemcisi doğrulanmadı" yazılmıştı, MicroLink (Tailscale uyumlu ESP32 istemcisi) doğrulandı, ama TCP/HTTP desteği doğrulanmadı. ESP yolu **kanıt çalışmasıyla** başlar (V-ESP0), Node sunucusu referans ve yedek kalır, Raspberry Pi alternatifi açık tutulur. Yeni aşamalar: V-ESP0, V-POLL, V-ESP1. Görsel yükleme kararı: sunucu görüntü işlemez (ESP'ye taşınabilir).
 
 ### 0.10 · yakınlık, Tailscale erişimi, masaüstü düzeni (797b3b3)
