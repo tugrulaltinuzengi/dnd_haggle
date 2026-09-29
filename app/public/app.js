@@ -11,6 +11,7 @@ const KIND = { buy: 'Alım', gamble: 'Hard Gamble', offer: 'Teklif teslimi', dm:
 let CH = [], S = null, auth = store.get(), es = null;
 let view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false, flt: 'all', form: false, f: { mid: null, iid: '', name: '', price: '', note: '' } };
 let pick = null, dmTab = 'live', toastT, dmFilter = 'new';
+let addr = null, addrTried = false, lf = { pid: '', kind: '' };
 
 function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2500); }
 async function api(path, body) {
@@ -24,14 +25,31 @@ const act = (path, body) => api(path, body).catch(() => {});
 function connect() {
   if (es) es.close();
   es = new EventSource('/api/events?token=' + encodeURIComponent(auth.token));
-  es.onmessage = (e) => { S = JSON.parse(e.data); render(); };
+  es.onmessage = (e) => { S = JSON.parse(e.data); if (S.role === 'dm' && !addrTried) { addrTried = true; loadAddr(); } render(); };
   es.onerror = async () => {
     if (es.readyState !== 2) return;            // tarayıcı kendi yeniden bağlanır
     const r = await fetch('/api/chars').catch(() => null);
     if (r) { auth = null; store.set(null); S = null; render(); } // sunucu ayakta ama token geçersiz
   };
 }
-function logout() { if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false, flt: 'all', form: false, f: { mid: null, iid: '', name: '', price: '', note: '' } }; render(); }
+function logout() { addr = null; addrTried = false; if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false, flt: 'all', form: false, f: { mid: null, iid: '', name: '', price: '', note: '' } }; render(); }
+
+async function loadAddr() {
+  try { const r = await fetch('/api/address', { headers: { 'x-token': auth.token } }); addr = await r.json(); render(); } catch {}
+}
+function lockedSlot(i) {
+  return `<button class="shelfitem" disabled><span class="art"><span class="artlabel">Kilitli</span><span class="artname">Yakınlık: ${esc(i.needName)}</span></span><span class="pr" style="opacity:.45">—</span></button>`;
+}
+function addrCard() {
+  return `<h2>Davet adresi</h2><div class="card" style="text-align:left">${addr && addr.url
+    ? `<div class="price" style="white-space:normal;word-break:break-all">${esc(addr.url)}</div><small>${addr.funnel ? 'Herkese açık (Funnel)' : 'Tailscale ağı'} · oyuncular bu adresi açar</small><div class="tl"><button class="btn sm ghost" data-act="copyaddr">Kopyala</button><button class="btn sm ghost" data-act="shareaddr">Paylaş</button></div>`
+    : '<small>Adres yok. Sunucuda <b>npm run tailscale</b> çalıştır, sonra bu sayfayı yenile.</small>'}</div>`;
+}
+function ledgerFilters() {
+  return `<div class="two"><select id="lf-p"><option value="">Tüm oyuncular</option>${S.players.map((p) => `<option value="${p.id}" ${lf.pid === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+    <select id="lf-k"><option value="">Tüm türler</option>${Object.entries(KIND).map(([k, l]) => `<option value="${k}" ${lf.kind === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <button class="btn ghost" data-act="csv">CSV indir (tüm kayıtlar)</button>`;
+}
 
 // ---------- ortak parçalar ----------
 const initial = (n) => (String(n || '?').trim()[0] || '?').toLocaleUpperCase('tr');
@@ -64,13 +82,18 @@ function art(i, { cls = '', label = null, extra = '' } = {}) {
 function portrait(m, opt = {}) {
   const bg = m.portrait ? ` style="background-image:url('${esc(m.portrait)}')"` : '';
   return `<div class="portrait ${opt.small ? 'sm' : ''}"${bg}>${m.portrait ? '' : `<div class="pface"><span class="pinit">${esc(initial(m.name))}</span><span class="plabel">PORTRE</span></div>`}
-    <div class="plaque"><span class="pico">${esc(initial(m.name))}</span><span class="pname">${esc(m.name)}</span>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı</span>' : ''}</div></div>`;
+    <div class="plaque"><span class="pico">${esc(initial(m.name))}</span><span class="pname">${esc(m.name)}</span>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı</span>' : ''}</div>${m.affinity && !opt.noAff ? `<div class="pbar">${affbar(m.affinity, { sm: true })}</div>` : ''}</div>`;
 }
 // Sabır çubuğu: oran gösterir (kaç puan olduğunu ve satıcı tipini açık etmez).
 function repbar(rep, max, { sm = false } = {}) {
   const r = max > 0 ? Math.max(0, Math.min(1, rep / max)) : 1;
   const st = rep <= 0 ? ['zero', 'Bitti'] : r <= 0.34 ? ['low', 'Sinirli'] : r <= 0.67 ? ['mid', 'Huzursuz'] : ['', 'Sakin'];
-  return `<div class="repbar ${st[0]} ${sm ? 'sm' : ''}"><span class="rl">Sabır</span><span class="rt"><i style="width:${Math.round(r * 100)}%"></i></span><span class="rw">${st[1]}</span></div>`;
+  return `<div class="repbar ${st[0]} ${sm ? 'sm' : ''}"><span class="rl">Pazar</span><span class="rt"><i style="width:${Math.round(r * 100)}%"></i></span><span class="rw">${st[1]}</span></div>`;
+}
+// Yakınlık çubuğu: satıcıyla uzun vadeli ilişki (seviye eşikleri 20/40/60/80).
+function affbar(a, { sm = false, label = true } = {}) {
+  const pct = Math.max(0, Math.min(100, a.value));
+  return `<div class="affbar ${sm ? 'sm' : ''} ${label ? '' : 'nolabel'}"><span class="rl">Yakınlık</span><span class="rt"><i style="width:${pct}%"></i>${[20, 40, 60, 80].map((t) => `<b style="left:${t}%"></b>`).join('')}</span><span class="rw">${esc(a.name)}</span></div>`;
 }
 const led = (e, who = '') => `<div class="led"><span class="lt">Hf${e.week} Gn${e.day}</span><span class="ln">${who}${esc(e.name)}<small>${KIND[e.kind] || esc(e.kind)}${e.list ? ' · etiket ' + fmt(e.list) : ''}</small></span><span class="la ${e.amount < 0 ? 'neg' : 'pos'}">${e.amount > 0 ? '+' : ''}${fmt(e.amount)}</span></div>`;
 
@@ -116,16 +139,16 @@ function renderPlayer() {
 function renderMarket() {
   return `<h2>Pazar</h2><div class="list">${S.merchants.map((m) => `
     <button class="card row" data-mid="${m.id}"><span class="pico" style="width:52px;height:52px;font-size:28px">${esc(initial(m.name))}</span>
-      <span class="grow"><b style="margin:0">${esc(m.name)}</b>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı</span>' : ''}<small>${m.items.length} eşya</small></span> <span class="gold">›</span></button>`).join('') || '<p class="empty">Pazar boş.</p>'}</div>`;
+      <span class="grow"><b style="margin:0">${esc(m.name)}</b>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı</span>' : ''}<small>${m.items.length} eşya</small>${m.affinity ? affbar(m.affinity, { sm: true }) : ''}</span> <span class="gold">›</span></button>`).join('') || '<p class="empty">Pazar boş.</p>'}</div>`;
 }
 function renderItems() {
   const m = mer(view.mid);
   if (!m) { view.mid = null; return renderMarket(); }
   const flt = view.flt || 'all';
-  const shown = m.items.filter((i) => flt === 'all' || (flt === 'magic' ? i.magical : itemType(i) === flt));
+  const shown = m.items.filter((i) => (i.locked ? flt === 'all' : flt === 'all' || (flt === 'magic' ? i.magical : itemType(i) === flt)));
   return `<button class="back" data-act="up">‹ Pazar</button>${portrait(m, { small: true })}
     <div class="filters">${FILTERS.map(([k, l]) => `<button data-flt="${k}" class="${flt === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    <div class="shelf">${shown.map((i) => `
+    <div class="shelf">${shown.map((i) => i.locked ? lockedSlot(i) : `
       <button class="shelfitem" data-iid="${i.id}" ${i.stock === 0 ? 'disabled' : ''}>
         ${art(i, { extra: i.stock === 0 ? '<span class="sold">TÜKENDİ</span>' : i.stock ? `<span class="stock">×${i.stock}</span>` : '' })}
         <span class="pr"><i class="coin"></i>${fmt(i.price)}</span></button>`).join('') || '<p class="empty" style="grid-column:1/-1">Bu rafta bir şey yok.</p>'}</div>
@@ -155,7 +178,7 @@ function renderBids(me) {
   const m = mer(f.mid);
   const form = view.form ? `<div class="offer">
       <select id="f-m">${S.merchants.map((x) => `<option value="${x.id}" ${x.id === f.mid ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
-      <select id="f-i" style="margin-top:8px"><option value="">Özel istek…</option>${(m ? m.items : []).map((i) => `<option value="${i.id}" ${i.id === f.iid ? 'selected' : ''}>${esc(i.name)} · ${fmt(i.price)} gp</option>`).join('')}</select>
+      <select id="f-i" style="margin-top:8px"><option value="">Özel istek…</option>${(m ? m.items.filter((i) => !i.locked) : []).map((i) => `<option value="${i.id}" ${i.id === f.iid ? 'selected' : ''}>${esc(i.name)} · ${fmt(i.price)} gp</option>`).join('')}</select>
       ${f.iid ? '' : `<input type="text" id="f-name" maxlength="40" placeholder="Ne istiyorsun?" value="${esc(f.name)}" style="margin-top:8px">`}
       <input type="number" id="f-price" inputmode="decimal" step="0.01" min="0" placeholder="Teklifin (gp)" value="${esc(f.price)}" style="margin-top:8px">
       <input type="text" id="f-note" maxlength="80" placeholder="Not (isteğe bağlı)" value="${esc(f.note)}" style="margin-top:8px">
@@ -176,6 +199,7 @@ function currentItem() {
 function renderNegotiation(me) {
   const f = currentItem();
   if (!f) { view.iid = null; return renderMarket(); }
+  if (f.i.locked) { view.iid = null; return renderMarket(); }
   const { m, i } = f, n = S.negs[i.id] || null, ch = chr(me.charId) || { bonus: { persuasion: 0, deception: 0, intimidation: 0 } };
   const status = n ? n.status : 'open', price = n ? n.price : i.price;
   const canHaggle = status === 'open' && !m.banned && i.stock !== 0;
@@ -185,11 +209,11 @@ function renderNegotiation(me) {
   const line = n && n.line ? n.line : m.banned ? 'Bugün seninle işim yok. Etiket fiyatı geçerli.' : 'Ne istiyorsun?';
   const broke = me.gold < price;
   return `<button class="back" data-act="up">‹ Geri</button>
-    <div class="repwrap">${repbar(n ? n.rep : 1, n ? n.maxRep : 1)}</div>
-    ${portrait(m, { small: true })}
+    <div class="neg"><div class="nl"><div class="repwrap">${repbar(n ? n.rep : 1, n ? n.maxRep : 1)}${m.affinity ? affbar(m.affinity, { sm: true }) : ''}</div>
+    ${portrait(m, { small: true, noAff: true })}
     <div class="bubble">${esc(line)}</div>
     ${art(i, { cls: 'xl' })}
-    <div class="bigprice">${price !== i.price ? `<s>${fmt(i.price)}</s>` : ''}${fmt(price)} gp</div>
+    <div class="bigprice">${price !== i.price ? `<s>${fmt(i.price)}</s>` : ''}${fmt(price)} gp</div></div><div class="nr">
     ${view.rolling ? '<div class="dice">Zar atılıyor</div>' : last ? `<div class="result ${last.outcome}">${OUT[last.outcome][0]}${last.roll !== null ? `<small>Zar ${last.rolls.length > 1 ? last.rolls.join(' / ') + ' → ' : ''}${last.roll} + ${last.bonus} = ${last.total}</small>` : ''}<small>${OUT[last.outcome][1]}</small></div>` : ''}
     ${canHaggle && !view.rolling ? `
       <div class="offer"><div class="num"><span id="ynum">${fmt(view.y)}</span> gp<small>Teklifin</small></div>
@@ -202,7 +226,7 @@ function renderNegotiation(me) {
         ${m.revealed ? '<span></span>' : `<button class="btn ghost" data-act="insight" ${m.insightTried ? 'disabled' : ''}>${m.insightTried ? 'Bugün denedin' : 'Sez'}</button>`}
         ${i.magical ? '<span></span>' : `<button class="btn ghost" data-act="gamble">Hard Gamble</button>`}
       </div>
-    </div>`;
+    </div></div></div>`;
 }
 
 // ---------- DM ----------
@@ -239,21 +263,22 @@ function renderDM() {
     body = `<button class="btn sm" data-act="addm">+ Satıcı</button>` + S.merchants.map((m) => `
       <div class="card" style="text-align:left;margin-top:10px"><div class="row"><span class="pico" style="width:40px;height:40px">${esc(initial(m.name))}</span><b class="grow" style="margin:0">${esc(m.name)}</b><button class="btn sm ghost" data-editm="${m.id}">Düzenle</button><button class="btn sm ghost" data-del="merchant|${m.id}">Sil</button></div>
         <div class="seg">${Object.entries(TYPE_LABEL).map(([k, l]) => `<button class="${m.type === k ? 'on' : ''}" data-mtype="${m.id}|${k}">${l}</button>`).join('')}</div>
-        ${S.items.filter((i) => i.merchantId === m.id).map((i) => `<div class="row" style="padding:4px 0"><span class="grow">${esc(i.name)}${i.magical ? ' <span class="tag mg">büyülü</span>' : ''}${i.stock !== null ? ` <small>(${i.stock})</small>` : ''}</span><span class="price">${fmt(i.price)}</span><button class="btn sm ghost" data-editi="${i.id}">Düzenle</button><button class="btn sm ghost" data-del="item|${i.id}">Sil</button></div>`).join('')}
+        ${S.items.filter((i) => i.merchantId === m.id).map((i) => `<div class="row" style="padding:4px 0"><span class="grow">${esc(i.name)}${i.magical ? ' <span class="tag mg">büyülü</span>' : ''}${i.minAffinity ? ` <span class="tag">yakınlık ${i.minAffinity}+</span>` : ''}${i.stock !== null ? ` <small>(${i.stock})</small>` : ''}</span><span class="price">${fmt(i.price)}</span><button class="btn sm ghost" data-editi="${i.id}">Düzenle</button><button class="btn sm ghost" data-del="item|${i.id}">Sil</button></div>`).join('')}
         <button class="btn sm ghost" data-addi="${m.id}">+ Eşya</button></div>`).join('');
   } else if (dmTab === 'players') {
-    body = `<h2>Oyuncular</h2><div class="list">${S.players.map((p) => `
+    body = addrCard() + `<h2>Oyuncular</h2><div class="list">${S.players.map((p) => `
       <div class="card" style="text-align:left"><div class="row"><span class="pico" style="width:40px;height:40px">${esc(initial(p.name))}</span><span class="grow"><b style="margin:0">${esc(p.name)}</b><small>${esc((chr(p.charId) || {}).name || '')} · ${p.inventory.length} eşya</small></span><span class="price"><i class="coin"></i>${fmt(p.gold)}</span></div>
+        ${S.merchants.map((m) => { const a = S.affinity.find((x) => x.playerId === p.id && x.merchantId === m.id); return a ? `<div class="row affrow"><span class="grow">${esc(m.name)}</span>${affbar(a, { sm: true, label: false })}<button class="btn sm ghost" data-aff="${p.id}|${m.id}|-5">−5</button><button class="btn sm ghost" data-aff="${p.id}|${m.id}|5">+5</button></div>` : ''; }).join('')}
         <div class="tl"><button class="btn sm ghost" data-gold="${p.id}|-10">−10</button><button class="btn sm ghost" data-gold="${p.id}|10">+10</button><button class="btn sm ghost" data-gold="${p.id}|100">+100</button><button class="btn sm ghost" data-goldset="${p.id}">Ayarla</button></div>
         <div class="tl"><button class="btn sm ${p.advantage ? '' : 'ghost'}" data-adv="${p.id}|${p.advantage ? 0 : 1}">Avantaj ${p.advantage ? 'AÇIK' : 'ver'}</button><button class="btn sm ghost" data-sendbid="${p.id}">Teklif gönder</button><button class="btn sm ghost" data-del="player|${p.id}">Sil</button></div></div>`).join('') || '<p class="empty">Kimse yok.</p>'}</div>`;
   } else {
-    const L = S.ledger.slice().reverse();
+    const L = S.ledger.slice().reverse().filter((e) => (!lf.pid || e.playerId === lf.pid) && (!lf.kind || e.kind === lf.kind));
     const spent = -L.filter((e) => e.amount < 0).reduce((a, e) => a + e.amount, 0);
     const granted = L.filter((e) => e.kind === 'dm' && e.amount > 0).reduce((a, e) => a + e.amount, 0);
-    body = `<h2>Alışveriş defteri</h2><div class="stat3"><div class="card"><b>${fmt(spent)}</b><small>harcanan</small></div><div class="card"><b>${fmt(granted)}</b><small>DM'in verdiği</small></div><div class="card"><b>${L.length}</b><small>işlem</small></div></div>
+    body = `<h2>Alışveriş defteri</h2>${ledgerFilters()}<div class="stat3" style="margin-top:10px"><div class="card"><b>${fmt(spent)}</b><small>harcanan</small></div><div class="card"><b>${fmt(granted)}</b><small>DM'in verdiği</small></div><div class="card"><b>${L.length}</b><small>işlem</small></div></div>
       ${L.map((e) => led(e, pname(e.playerId) + ' · ' + (S.merchants.find((m) => m.id === e.merchantId) ? esc(S.merchants.find((m) => m.id === e.merchantId).name) + ' · ' : ''))).join('') || '<p class="empty">Henüz işlem yok.</p>'}`;
   }
-  $app.innerHTML = head + body + tabs;
+  $app.innerHTML = head + `<div class="dmpane">${body}</div>` + tabs;
 }
 
 // ---------- render ----------
@@ -267,6 +292,8 @@ function render() {
 
 // ---------- olaylar ----------
 $app.addEventListener('change', (e) => {
+  if (e.target.id === 'lf-p') { lf.pid = e.target.value; return render(); }
+  if (e.target.id === 'lf-k') { lf.kind = e.target.value; return render(); }
   const f = view.f;
   if (e.target.id === 'f-m') { f.mid = e.target.value; f.iid = ''; render(); }
   if (e.target.id === 'f-i') { f.iid = e.target.value; render(); }
@@ -298,6 +325,7 @@ $app.addEventListener('click', async (e) => {
   if (d.ap) { view.approach = d.ap; return render(); }
   if (d.dtab) { dmTab = d.dtab; return render(); }
   if (d.bf) { dmFilter = d.bf; return render(); }
+  if (d.aff) { const [pid, mid, delta] = d.aff.split('|'); return void act('dm/affinity', { playerId: pid, merchantId: mid, delta: +delta }); }
   if (d.bacc) return void act('bidreply', { id: d.bacc, action: 'accept' });
   if (d.bwd) return void act('bidreply', { id: d.bwd, action: 'withdraw' });
   if (d.bcnt) { const o = S.bids.find((x) => x.id === d.bcnt); const v = prompt('Karşı teklifin (gp):', fmt(o.price)); return void (v && act('bidreply', { id: o.id, action: 'counter', price: v })); }
@@ -321,14 +349,24 @@ $app.addEventListener('click', async (e) => {
   if (d.price) { const [p, i] = d.price.split('|'); const v = prompt('Yeni fiyat (gp):'); return void (v && act('dm/setprice', { playerId: p, itemId: i, price: v })); }
   if (d.mtype) { const [id, type] = d.mtype.split('|'); const m = S.merchants.find((x) => x.id === id); return void act('dm/merchant', { id, name: m.name, type }); }
   if (d.editm) { const m = S.merchants.find((x) => x.id === d.editm); const name = prompt('Satıcı adı:', m.name); if (!name) return; return void act('dm/merchant', { id: m.id, name, type: m.type }); }
-  if (d.addi) { const name = prompt('Eşya adı:'); if (!name) return; const price = prompt('Fiyat (gp):'); if (!price) return; const magical = confirm('Büyülü mü? (Hard Gamble yasak olur)'); const stock = prompt('Stok (boş = sınırsız):', ''); return void act('dm/item', { merchantId: d.addi, name, price, magical, stock }); }
-  if (d.editi) { const i = S.items.find((x) => x.id === d.editi); const name = prompt('Eşya adı:', i.name); if (!name) return; const price = prompt('Fiyat (gp):', i.price); if (!price) return; const magical = confirm('Büyülü mü?'); const stock = prompt('Stok (boş = sınırsız):', i.stock ?? ''); return void act('dm/item', { id: i.id, merchantId: i.merchantId, name, price, magical, stock }); }
+  if (d.addi) { const name = prompt('Eşya adı:'); if (!name) return; const price = prompt('Fiyat (gp):'); if (!price) return; const magical = confirm('Büyülü mü? (Hard Gamble yasak olur)'); const stock = prompt('Stok (boş = sınırsız):', ''); const minAffinity = prompt('Gereken yakınlık 0-100 (0 = herkes görür):', '0'); return void act('dm/item', { merchantId: d.addi, name, price, magical, stock, minAffinity }); }
+  if (d.editi) { const i = S.items.find((x) => x.id === d.editi); const name = prompt('Eşya adı:', i.name); if (!name) return; const price = prompt('Fiyat (gp):', i.price); if (!price) return; const magical = confirm('Büyülü mü?'); const stock = prompt('Stok (boş = sınırsız):', i.stock ?? ''); const minAffinity = prompt('Gereken yakınlık 0-100 (0 = herkes görür):', i.minAffinity || 0); return void act('dm/item', { id: i.id, merchantId: i.merchantId, name, price, magical, stock, minAffinity }); }
   if (d.del) { const [kind, id] = d.del.split('|'); if (confirm('Silinsin mi?')) act('dm/delete', { kind, id }); return; }
   if (d.gold) { const [id, delta] = d.gold.split('|'); const p = S.players.find((x) => x.id === id); return void act('dm/player', { id, gold: Math.max(0, p.gold + +delta) }); }
   if (d.goldset) { const v = prompt('Altın:'); return void (v !== null && act('dm/player', { id: d.goldset, gold: v })); }
   if (d.adv) { const [id, v] = d.adv.split('|'); return void act('dm/player', { id, advantage: v === '1' }); }
   switch (d.act) {
     case 'logout': return logout();
+    case 'copyaddr': try { await navigator.clipboard.writeText(addr.url); toast('Adres kopyalandı'); } catch { prompt('Adresi kopyala:', addr.url); } return;
+    case 'shareaddr': if (navigator.share) { try { await navigator.share({ title: 'Pazar', url: addr.url }); } catch {} } else { try { await navigator.clipboard.writeText(addr.url); toast('Adres kopyalandı'); } catch { prompt('Adresi kopyala:', addr.url); } } return;
+    case 'csv': {
+      try {
+        const r = await fetch('/api/ledger.csv', { headers: { 'x-token': auth.token } });
+        if (!r.ok) throw new Error();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'defter.csv'; document.body.appendChild(a); a.click(); a.remove();
+      } catch { toast('İndirilemedi'); }
+      return;
+    }
     case 'up': if (view.iid) view.iid = null; else view.mid = null; return render();
     case 'newday': if (confirm('Yeni gün: tüm pazarlıklar ve yasaklar sıfırlanır.')) act('dm/newday'); return;
     case 'addm': { const name = prompt('Satıcı adı:'); if (!name) return; return void act('dm/merchant', { name, type: 'notr' }); }
@@ -353,6 +391,19 @@ $app.addEventListener('click', async (e) => {
     }
     case 'insight': { const f = currentItem(); return void act('insight', { merchantId: f.m.id }); }
   }
+});
+
+// Klavye (PC): Enter pazarlık, sol/sağ ok teklifi değiştirir. Form alanlarındayken karışmaz.
+document.addEventListener('keydown', (e) => {
+  if (!S || S.role !== 'player' || !view.iid || view.rolling) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+  const btn = document.querySelector('[data-act=offer]');
+  if (!btn) return;
+  const k = e.key;
+  if (k === 'Enter') { e.preventDefault(); btn.click(); }
+  else if (k === 'ArrowLeft' || k === 'ArrowDown') { e.preventDefault(); const b = document.querySelector('[data-step="-1"]'); if (b) b.click(); }
+  else if (k === 'ArrowRight' || k === 'ArrowUp') { e.preventDefault(); const b = document.querySelector('[data-step="1"]'); if (b) b.click(); }
 });
 
 (async function init() {

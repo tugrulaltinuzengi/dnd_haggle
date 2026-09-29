@@ -101,6 +101,57 @@ async function withServer(port, dice, fn) {
     assert.deepEqual(errs, []);
     await pc.close(); await dc.close();
   });
+
+  // 4) Düzen ve barlar: 4 genişlikte taşma yok, masaüstünde iki sütun, iki bar, klavye, DM sekmeleri
+  await withServer(3114, '20', async (url) => {
+    const noOverflow = (pg) => pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    for (const w of [360, 768, 1280, 1920]) {
+      const ctx = await b.newContext({ viewport: { width: w, height: 900 }, isMobile: w < 500 });
+      const p = await ctx.newPage(); p.on('dialog', (x) => x.accept(x.defaultValue()));
+      const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+      await p.goto(url);
+      assert.ok(await noOverflow(p), `katılım ekranı taşıyor (${w})`);
+      await p.click('[data-pick=ozan]'); await p.fill('#name', `W${w}`); await p.click('#go');
+      await p.waitForSelector('[data-mid=m2]');
+      assert.ok(await noOverflow(p), `pazar taşıyor (${w})`);
+      assert.ok((await p.textContent('[data-mid=m2]')).includes('Yakınlık'), 'pazar satırında yakınlık çubuğu');
+      await p.click('[data-mid=m2]'); await p.waitForSelector('.shelfitem');
+      assert.ok(await noOverflow(p), `raf taşıyor (${w})`);
+      assert.ok(await p.locator('.portrait .affbar').count() === 1, 'portrede yakınlık çubuğu');
+      await p.click('text=Uzun Kılıç');
+      await p.waitForSelector('.neg');
+      assert.ok(await noOverflow(p), `pazarlık taşıyor (${w})`);
+      // iki ayrı bar: anlık Pazar ve uzun vadeli Yakınlık
+      assert.equal(await p.locator('.repwrap .repbar').count(), 1);
+      assert.equal(await p.locator('.repwrap .affbar').count(), 1);
+      assert.match(await p.textContent('.repwrap .repbar .rl'), /Pazar/);
+      assert.match(await p.textContent('.repwrap .affbar .rl'), /Yakınlık/);
+      const nl = await p.locator('.nl').boundingBox(), nr = await p.locator('.nr').boundingBox();
+      if (w >= 900) assert.ok(nr.x >= nl.x + nl.width - 1, `masaüstünde iki sütun olmalı (${w})`);
+      else assert.ok(nr.y >= nl.y + nl.height - 1, `mobilde alt alta olmalı (${w})`);
+      if (w >= 900) { await p.keyboard.press('Enter'); await p.waitForSelector('.result.crit'); } // klavye ile pazarlık
+      await p.click('[data-act=up]'); await p.click('[data-act=up]');
+      await p.click('[data-tab=bag]'); await p.waitForSelector('.bag');
+      assert.ok(await noOverflow(p), `çanta taşıyor (${w})`);
+      await p.click('[data-tab=bids]');
+      assert.ok(await noOverflow(p), `teklifler taşıyor (${w})`);
+      assert.deepEqual(errs, []);
+      await ctx.close();
+    }
+    const dc = await b.newContext({ viewport: { width: 1280, height: 900 } });
+    const d = await dc.newPage(); d.on('dialog', (x) => x.accept(x.defaultValue()));
+    await d.goto(url); await d.click('#dm'); await d.fill('#pin', '4321'); await d.click('#dmgo');
+    for (const tab of ['live', 'bids', 'market', 'players', 'ledger']) {
+      await d.click(`[data-dtab=${tab}]`);
+      assert.ok(await noOverflow(d), `DM ${tab} sekmesi taşıyor`);
+    }
+    await d.click('[data-dtab=players]');
+    await d.waitForSelector('.affrow');
+    assert.ok(await d.locator('.affrow .affbar').count() >= 3, 'DM oyuncu başına satıcı yakınlığı görür');
+    await d.click('[data-dtab=ledger]');
+    await d.selectOption('#lf-k', 'buy');
+    await dc.close();
+  });
   await b.close();
   console.log('E2E OK');
 })().catch((e) => { console.error(e); process.exit(1); });

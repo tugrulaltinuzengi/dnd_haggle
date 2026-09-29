@@ -6,7 +6,11 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/*.test.js",
-    "e2e": "node test/e2e.js"
+    "e2e": "node test/e2e.js",
+    "tailscale": "node tools/tailscale.js",
+    "backup": "node tools/backup.js"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

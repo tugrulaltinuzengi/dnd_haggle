@@ -5,12 +5,17 @@ const os = require('os');
 const path = require('path');
 process.env.DATA_FILE = path.join(os.tmpdir(), `pazar-api-${process.pid}.json`);
 process.env.DM_PIN = '9999';
+process.env.PIN_LOCK_MS = '300';
 const { server } = require('../server');
 
 let base, dm, ali, veli, items;
 const call = async (name, body, tok) => {
   const r = await fetch(`${base}/api/${name}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': tok || '' }, body: JSON.stringify(body || {}) });
   return { status: r.status, body: await r.json() };
+};
+const get = async (name, tok) => {
+  const r = await fetch(`${base}/api/${name}`, { headers: { 'x-token': tok || '' } });
+  return { status: r.status, text: await r.text() };
 };
 const snap = async (tok) => {
   const ctl = new AbortController();
@@ -123,4 +128,83 @@ test('oyuncuya sabır bilgisi gider (rep, maxRep), DC ve tip gitmez', async () =
   assert.ok(n.maxRep >= 2);
   const raw = JSON.stringify(await snap(veli));
   assert.ok(!/"dc"|"type"|"u":/.test(raw));
+});
+
+const aff = async (tok, mid) => (await snap(tok)).merchants.find((m) => m.id === mid).affinity;
+
+test('yakınlık: alışveriş artırır, haftalık kazanç tavanı 10', async () => {
+  const cadir = item('Çadır'); // m1, 2 gp, sınırsız stok
+  assert.equal((await aff(veli, 'm1')).value, 20);
+  await call('accept', { itemId: cadir.id }, veli);
+  const a1 = await aff(veli, 'm1');
+  assert.equal(a1.value, 22);
+  assert.equal(a1.name, 'Tanıdık');
+  for (let i = 0; i < 5; i++) await call('accept', { itemId: cadir.id }, veli);
+  assert.equal((await aff(veli, 'm1')).value, 30); // 20 + tavan 10
+});
+
+test('yakınlık: DM ayarlar, seviye adı ve sonraki eşik döner', async () => {
+  const pid = (await snap(dm)).players.find((p) => p.name === 'Veli').id;
+  assert.equal((await call('dm/affinity', { playerId: pid, merchantId: 'm1', value: 65 }, dm)).status, 200);
+  const a = await aff(veli, 'm1');
+  assert.deepEqual([a.value, a.name, a.next, a.nextName], [65, 'Dost', 80, 'Sırdaş']);
+  assert.equal((await call('dm/affinity', { playerId: pid, merchantId: 'm1', delta: 500 }, dm)).status, 200);
+  assert.equal((await aff(veli, 'm1')).value, 100); // sınır
+  await call('dm/affinity', { playerId: pid, merchantId: 'm1', value: 65 }, dm);
+});
+
+test('Dost seviyesinde pazarlık +1 sabırla başlar', async () => {
+  const ip = item('İp (15 m)'); // m1 cömert Rep 4
+  await call('offer', { itemId: ip.id, y: 0.6, approach: 'persuasion' }, veli);
+  const n = (await snap(veli)).negs[ip.id];
+  assert.equal(n.maxRep, 5);
+});
+
+test('kilitli eşya: yakınlık yetmeyince ad ve fiyat gitmez, işlem reddedilir', async () => {
+  const pid = (await snap(dm)).players.find((p) => p.name === 'Veli').id;
+  await call('dm/item', { merchantId: 'm1', name: 'Sırdaş Kılıcı', price: 30, minAffinity: 80 }, dm);
+  const locked = (await snap(dm)).items.find((i) => i.name === 'Sırdaş Kılıcı');
+  const view = await snap(veli); // Veli yakınlığı 65
+  const entry = view.merchants.find((m) => m.id === 'm1').items.find((i) => i.id === locked.id);
+  assert.equal(entry.locked, true);
+  assert.equal(entry.needName, 'Sırdaş');
+  assert.ok(!JSON.stringify(view).includes('Sırdaş Kılıcı'));
+  assert.equal((await call('offer', { itemId: locked.id, y: 20, approach: 'persuasion' }, veli)).status, 400);
+  assert.equal((await call('accept', { itemId: locked.id }, veli)).status, 400);
+  assert.equal((await call('bid', { merchantId: 'm1', itemId: locked.id, price: 20 }, veli)).status, 400);
+  await call('dm/affinity', { playerId: pid, merchantId: 'm1', value: 85 }, dm);
+  const open = (await snap(veli)).merchants.find((m) => m.id === 'm1').items.find((i) => i.id === locked.id);
+  assert.equal(open.name, 'Sırdaş Kılıcı');
+  assert.equal((await call('offer', { itemId: locked.id, y: 20, approach: 'persuasion' }, veli)).status, 200);
+});
+
+test('sinirlenme yakınlığı düşürür', async () => {
+  const pid = (await snap(dm)).players.find((p) => p.name === 'Ali').id;
+  await call('dm/affinity', { playerId: pid, merchantId: 'm3', value: 50 }, dm);
+  const it = item('Ejder Pulu'); // m3 açgözlü Rep 2, X=120
+  // 25'ten düşük teklifler hakaret: Rep 2 -> 1 -> 0 (sinirlenme), her biri yakınlık düşürür
+  await call('offer', { itemId: it.id, y: 1, approach: 'persuasion' }, ali);
+  await call('offer', { itemId: it.id, y: 1, approach: 'persuasion' }, ali);
+  assert.equal((await aff(ali, 'm3')).value, 50 - 1 - 5); // hakaret -1, sinirlenme -5 (hakaret sinirlendirdiğinde ikisi yerine sinirlenme sayılır)
+});
+
+test('defter CSV ve davet adresi yalnızca DM için', async () => {
+  const csv = await get('ledger.csv', dm);
+  assert.equal(csv.status, 200);
+  assert.ok(csv.text.includes('zaman,hafta,gun,tur,oyuncu,satici,esya,tutar,etiket'));
+  assert.ok(csv.text.includes('Çadır'));
+  assert.equal((await get('ledger.csv', ali)).status, 403);
+  const addr = await get('address', dm);
+  assert.equal(addr.status, 200);
+  assert.equal(JSON.parse(addr.text).url, null);
+  assert.equal((await get('address', ali)).status, 403);
+});
+
+test('PIN hız sınırı: art arda yanlış denemede kilitlenir, süre dolunca açılır', async () => {
+  let last;
+  for (let i = 0; i < 8; i++) { last = await call('dm/login', { pin: 'yanlis' }); if (last.status === 429) break; }
+  assert.equal(last.status, 429);
+  assert.equal((await call('dm/login', { pin: '9999' })).status, 429); // doğru PIN de kilitliyken reddedilir
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal((await call('dm/login', { pin: '9999' })).status, 200);
 });

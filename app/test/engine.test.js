@@ -87,6 +87,22 @@ test('teklif sınırları', () => {
   assert.throws(() => go('notr', 0, [10]));
 });
 
+test('yakınlık: DC indirimi ve başlangıç sabır bonusu', () => {
+  const neg = newNegotiation(item, 'notr', 1);
+  assert.equal(neg.rep, 4);
+  assert.equal(neg.maxRep, 4);
+  // DC 15, dcMod -3 => DC 12: toplam 12 başarı olur
+  const n1 = newNegotiation(item, 'notr');
+  const e1 = haggle(n1, { X: 100, type: 'notr', Y: 60, approach: 'persuasion', bonus: 2, rolls: [10], dcMod: -3 });
+  assert.equal(e1.outcome, 'success');
+  // aynı zar DC indirimi olmadan başarısız
+  const n2 = newNegotiation(item, 'notr');
+  assert.equal(haggle(n2, { X: 100, type: 'notr', Y: 60, approach: 'persuasion', bonus: 2, rolls: [10] }).outcome, 'fail');
+  // kritik eşiği de kayar: DC 12 + 5 = 17
+  const n3 = newNegotiation(item, 'notr');
+  assert.equal(haggle(n3, { X: 100, type: 'notr', Y: 60, approach: 'persuasion', bonus: 2, rolls: [15], dcMod: -3 }).outcome, 'crit');
+});
+
 test('ruh hali sayı sızdırmaz', () => {
   const neg = newNegotiation(item, 'notr');
   assert.equal(moodOf(neg, 'notr'), '😊');

@@ -13,14 +13,15 @@ const GAMBLE_RATIO = 0.5;
 
 const round = (v) => Math.round(v * 100) / 100;
 
-function newNegotiation(item, type) {
-  const rep = TYPES[type].rep;
+function newNegotiation(item, type, bonusRep = 0) {
+  const rep = TYPES[type].rep + bonusRep;
   return { rep, maxRep: rep, lastY: null, price: item.price, status: 'open', history: [], line: null };
 }
 
 // status: 'open' (pazarlık sürüyor) | 'deal' (kritik/başarı, fiyat sabit) | 'angered' (Rep 0, 1.1X)
-function haggle(neg, { X, type, Y, approach, bonus, rolls }) {
+function haggle(neg, { X, type, Y, approach, bonus, rolls, dcMod = 0 }) {
   const T = TYPES[type];
+  const dc = T.dc + dcMod; // yakınlık DC'yi düşürür (gizli)
   if (!T) throw new Error('Bilinmeyen satıcı tipi');
   if (!APPROACHES.includes(approach)) throw new Error('Bilinmeyen yaklaşım');
   if (neg.status !== 'open') throw new Error('Bu pazarlık bitti.');
@@ -40,11 +41,11 @@ function haggle(neg, { X, type, Y, approach, bonus, rolls }) {
       entry.rolls = rolls.slice();
       entry.roll = Math.max(...rolls);
       entry.total = entry.roll + bonus;
-      if (entry.roll === 20 || entry.total >= T.dc + 5) {
+      if (entry.roll === 20 || entry.total >= dc + 5) {
         entry.outcome = 'crit';
         neg.price = round(Y);
         neg.status = 'deal';
-      } else if (entry.total >= T.dc) {
+      } else if (entry.total >= dc) {
         entry.outcome = 'success';
         neg.price = round(Y + a * (T.u / 2));
         neg.status = 'deal';
