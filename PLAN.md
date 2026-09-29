@@ -41,5 +41,5 @@ Formül f = X − a·u/2 · DC 12 / 15 / 18 · Rep 4 / 3 / 2 · Y < X/4 zarsız 
 - [ ] Hedefler: nötr satıcıda +5 bonusla sinirlenme %15'in altı, Hard Gamble ara sıra seçiliyor, açgözlü satıcı gerçekten zor hissettiriyor.
 - [ ] DC, Rep ve fiyatlara göre ayar, sürüm etiketi `v1.0`.
 
-## v2 (sonraki sürüm)
-Konuşan portreler (5 ağız karesi) ve görselli eşya kütüphanesi: [PLAN_V2.md](PLAN_V2.md). Telif nedeniyle görseller depoya girmez, kütüphane açık lisanslı set ve DM'in yerel içe aktarmasıyla kurulur.
+## v2 (sonraki sürüm, yerel)
+Konuşan portreler (5 ağız karesi, gerçekçi fantazi) ve görselli eşya kütüphanesi: [PLAN_V2.md](PLAN_V2.md). Sunucu DM'in bilgisayarında koşar (LAN), ticari değil. The Crooked Moon lisanslı. Telifli görsel, kitap metni ve 5e.tools verisi herkese açık depoya girmez, yerel klasörlerde kalır. Render/APK yayın adımları (Aşama 5) yerel çalışma tercih edildiği için beklemede.

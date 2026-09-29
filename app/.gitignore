@@ -7,3 +7,4 @@ app/media/
 app/tools/import-items/input/
 app/tools/import-items/output/
 *.pazarlib
+data/
