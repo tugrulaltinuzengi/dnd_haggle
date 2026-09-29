@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const os = require('os');
+const http = require('http');
 const path = require('path');
 process.env.DATA_FILE = path.join(os.tmpdir(), `pazar-api-${process.pid}.json`);
 process.env.DM_PIN = '9999';
@@ -144,7 +145,7 @@ test('oyuncuya sabır bilgisi gider (rep, maxRep), DC ve tip gitmez', async () =
   assert.equal(typeof n.rep, 'number');
   assert.ok(n.maxRep >= 2);
   const raw = JSON.stringify(await snap(veli));
-  assert.ok(!/"dc"|"type"|"u":/.test(raw));
+  assert.ok(!/"dc"|"u":|comert|notr|acgozlu/.test(raw), 'DC ve satıcı tipi (u) oyuncuya gitmemeli');
 });
 
 const aff = async (tok, mid) => (await snap(tok)).merchants.find((m) => m.id === mid).affinity;
@@ -298,4 +299,122 @@ test('medya: temizleme ve silme dosyayı da kaldırır', async () => {
   assert.equal(up.status, 200);
   await call('dm/delete', { kind: 'item', id: item('Çadır').id }, dm);
   assert.equal((await getRaw(up.body.url)).status, 404);
+});
+
+test('yakınlık ayarları DM\'e ait: kaydet, doğrula, geçersizi reddet, sıfırla', async () => {
+  assert.equal((await call('dm/affsettings', { start: 30 }, ali)).status, 403);
+  assert.equal((await call('dm/affsettings', { start: 30, gain: { buy: 5 } }, dm)).status, 200);
+  let cfg = (await snap(dm)).settings;
+  assert.equal(cfg.affinity.start, 30);
+  assert.equal(cfg.affinity.gain.buy, 5);
+  assert.equal(cfg.affinity.gain.offer, 5);          // dokunulmayan değer korunur
+  assert.equal(cfg.defaults.start, 20);
+  // yeni oyuncu yeni başlangıçla girer ve yeni kazançla yükselir
+  const yeni = (await call('join', { name: 'Yeni1', charId: 'ozan' })).body.token;
+  assert.equal((await aff(yeni, 'm1')).value, 30);
+  await call('accept', { itemId: item('İp (15 m)').id }, yeni);
+  assert.equal((await aff(yeni, 'm1')).value, 35);   // 30 + buy 5
+  // geçersiz değerler kaydedilmez
+  for (const bad of [{ thresholds: [40, 20, 60, 80] }, { thresholds: [10, 20, 30] }, { gain: { buy: 99 } }, { dcMod: [0, 0, 1, -2, -3] }, { start: 500 }, { bonusRepFrom: 9 }]) {
+    assert.equal((await call('dm/affsettings', bad, dm)).status, 400, JSON.stringify(bad));
+  }
+  assert.equal((await snap(dm)).settings.affinity.start, 30);
+  // eşikler seviyeyi belirler
+  await call('dm/affsettings', { thresholds: [10, 30, 50, 70] }, dm);
+  const pid = (await snap(dm)).players.find((p) => p.name === 'Yeni1').id;
+  await call('dm/affinity', { playerId: pid, merchantId: 'm1', value: 55 }, dm);
+  assert.equal((await aff(yeni, 'm1')).name, 'Dost');   // 50 eşiği geçildi
+  // sıfırla
+  await call('dm/affsettings', { reset: true }, dm);
+  cfg = (await snap(dm)).settings;
+  assert.deepEqual(cfg.affinity, cfg.defaults);
+  assert.equal((await aff(yeni, 'm1')).name, 'Müşteri'); // 55 varsayılan eşiklerde (40-59)
+});
+
+test('yakınlık kapatılınca etkiler ve kilitler devre dışı kalır', async () => {
+  const yeni = (await call('join', { name: 'Yeni1', charId: 'ozan' })).body.token; // aynı oyuncuya bağlanır
+  const kilitli = (await snap(dm)).items.find((i) => i.name === 'Sırdaş Kılıcı'); // 80 gerekir
+  const before = (await aff(yeni, 'm1')).value;
+  await call('dm/affsettings', { enabled: false }, dm);
+  const view = await snap(yeni);
+  assert.equal(view.merchants.find((m) => m.id === 'm1').affinity, null);          // çubuk gizlenir
+  const it = view.merchants.find((m) => m.id === 'm1').items.find((i) => i.id === kilitli.id);
+  assert.equal(it.locked, undefined);                                              // kilit yok sayılır
+  assert.equal(it.name, 'Sırdaş Kılıcı');
+  assert.equal((await call('accept', { itemId: kilitli.id }, yeni)).status, 200);
+  await call('dm/affsettings', { enabled: true }, dm);
+  assert.equal((await aff(yeni, 'm1')).value, before);                             // kapalıyken kazanç/kayıp yok
+  await call('dm/affsettings', { reset: true }, dm);
+});
+
+test('eşya alanları: açıklama, tür, nadirlik doğrulanır, geçersizde yarım eşya kalmaz', async () => {
+  const count = () => snap(dm).then((v) => v.items.length);
+  const n0 = await count();
+  const r = await call('dm/item', { merchantId: 'm2', name: 'Don Kılıcı', price: 200, desc: 'Soğuk bir kılıç.', type: 'weapon', rarity: 'rare', magical: true }, dm);
+  assert.equal(r.status, 200);
+  assert.match(r.body.id, /^[0-9a-f]+$/);
+  const shown = (await snap(ali)).merchants.find((m) => m.id === 'm2').items.find((i) => i.id === r.body.id);
+  assert.deepEqual([shown.desc, shown.type, shown.rarity, shown.magical], ['Soğuk bir kılıç.', 'weapon', 'rare', true]);
+  assert.equal(await count(), n0 + 1);
+  assert.equal((await call('dm/item', { merchantId: 'm2', name: 'Kötü', price: 5, type: 'silah' }, dm)).status, 400);
+  assert.equal((await call('dm/item', { merchantId: 'm2', name: 'Kötü', price: 5, rarity: 'efsane' }, dm)).status, 400);
+  assert.equal((await call('dm/item', { merchantId: 'm2', name: '  ', price: 5 }, dm)).status, 400);
+  assert.equal(await count(), n0 + 1, 'geçersiz istekler yarım eşya bırakmamalı');
+  // düzenleme alanları korur/günceller
+  await call('dm/item', { id: r.body.id, merchantId: 'm2', name: 'Don Kılıcı', price: 250, desc: '', type: '', rarity: 'none' }, dm);
+  const e = (await snap(ali)).merchants.find((m) => m.id === 'm2').items.find((i) => i.id === r.body.id);
+  assert.deepEqual([e.price, e.desc, e.type, e.rarity], [250, '', null, 'none']);
+});
+
+test('eşya varyantı görselleriyle kopyalanır ve bağımsızdır', async () => {
+  const src = (await snap(dm)).items.find((i) => i.name === 'Don Kılıcı');
+  const up = await upload(`kind=item&id=${src.id}`, makePng(64, 64), dm);
+  assert.equal(up.status, 200);
+  const v = await call('dm/itemvariant', { id: src.id, name: 'Don Kılıcı (yeni)' }, dm);
+  assert.equal(v.status, 200);
+  const items = (await snap(dm)).items;
+  const orig = items.find((i) => i.id === src.id), copy = items.find((i) => i.id === v.body.id);
+  assert.equal(copy.name, 'Don Kılıcı (yeni)');
+  assert.equal(copy.rarity, orig.rarity);
+  assert.equal(copy.price, orig.price);
+  assert.equal(copy.magical, orig.magical);
+  assert.notEqual(copy.image.split('?')[0], orig.image.split('?')[0]);
+  assert.equal((await getRaw(copy.image)).status, 200);
+  await call('dm/delete', { kind: 'item', id: src.id }, dm);
+  assert.equal((await getRaw(orig.image)).status, 404);
+  assert.equal((await getRaw(copy.image)).status, 200, 'kopya asıl silinince bozulmamalı');
+});
+
+function openStream(tok) {
+  return new Promise((resolve) => {
+    const req = http.get(`${base}/api/events?token=${tok}`, (res) => {
+      let buf = '', n = 0; const waiters = [];
+      res.on('data', (d) => {
+        buf += d; let i;
+        while ((i = buf.indexOf('\n\n')) >= 0) { const m = buf.slice(0, i); buf = buf.slice(i + 2); if (m.startsWith('data: ')) n++; }
+        waiters.splice(0).forEach((w) => w());
+      });
+      resolve({
+        count: () => n,
+        waitFor: (k, ms = 2500) => new Promise((ok, no) => { const t = setTimeout(() => no(new Error(`zaman aşımı (${n}/${k})`)), ms); const chk = () => { if (n >= k) { clearTimeout(t); ok(); } else waiters.push(chk); }; chk(); }),
+        close: () => req.destroy(),
+      });
+    });
+    req.on('error', () => {});
+  });
+}
+
+test('kapasite: 7 oyuncu + DM aynı anda bağlı, bir değişiklik hepsine kısa sürede ulaşır', async () => {
+  const toks = [ali, veli];
+  for (let i = 0; i < 5; i++) toks.push((await call('join', { name: `Kap${i}`, charId: 'druid' })).body.token);
+  const streams = await Promise.all([...toks, dm].map(openStream));
+  await Promise.all(streams.map((st) => st.waitFor(1)));           // ilk görünüm
+  const before = streams.map((st) => st.count());
+  const t0 = Date.now();
+  await call('dm/newday', {}, dm);
+  await Promise.all(streams.map((st, i) => st.waitFor(before[i] + 1)));
+  const ms = Date.now() - t0;
+  streams.forEach((st) => st.close());
+  assert.ok(ms < 1500, `güncelleme ${ms} ms sürdü`);
+  assert.equal(streams.length, 8);
 });

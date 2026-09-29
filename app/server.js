@@ -55,11 +55,20 @@ function sniffImage(buf) {
   return null;
 }
 const MEDIA_MIME = { png: 'image/png', jpg: 'image/jpeg' };
+const ITEM_TYPES = ['weapon', 'armor', 'potion', 'scroll', 'gem', 'gear', 'other'];
+const RARITIES = ['none', 'common', 'uncommon', 'rare', 'veryrare', 'legendary', 'artifact'];
 function mediaFileOf(rel) { // '/media/items/abc.png?v=1' -> güvenli mutlak yol ya da null
   const clean = String(rel || '').split('?')[0];
   if (!clean.startsWith('/media/')) return null;
   const abs = path.resolve(MEDIA_DIR, clean.slice('/media/'.length));
   return abs.startsWith(MEDIA_DIR + path.sep) && MEDIA_MIME[path.extname(abs).slice(1)] ? abs : null;
+}
+function copyMedia(rel, nid, thumb) { // kopya kendi dosyasına sahip olur (biri silinince öbürü bozulmaz)
+  const f = mediaFileOf(rel);
+  if (!f) return null;
+  const name = `${nid}${thumb ? '.t' : ''}${path.extname(f)}`;
+  fs.copyFileSync(f, path.join(path.dirname(f), name));
+  return `/media/${path.basename(path.dirname(f))}/${name}?v=${Date.now().toString(36)}`;
 }
 function unlinkMedia(rel) { const f = mediaFileOf(rel); if (f) { try { fs.unlinkSync(f); } catch {} } }
 function readRaw(req, max) {
@@ -93,7 +102,7 @@ function seed() {
 }
 let S;
 try { S = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { S = seed(); }
-S.offers ||= []; S.week ||= 1; S.ledger ||= []; S.affinity ||= {}; S.affinityWeek ||= {};
+S.offers ||= []; S.week ||= 1; S.ledger ||= []; S.affinity ||= {}; S.affinityWeek ||= {}; S.settings ||= {};
 let saveT;
 function save() {
   clearTimeout(saveT);
@@ -106,13 +115,23 @@ function log(text, playerId = null) {
 }
 
 // Yakınlık: oyuncunun satıcıyla uzun vadeli ilişkisi (0-100). Anlık pazar sabrından (Rep) ayrıdır.
-const AFF = {
+const AFF_DEFAULT = {
+  enabled: true,
   start: 20, weeklyCap: 10,
-  levels: [['Yabancı', 0], ['Tanıdık', 20], ['Müşteri', 40], ['Dost', 60], ['Sırdaş', 80]],
-  dcMod: [0, 0, -1, -2, -3],   // seviye başına zar eşiği indirimi
-  bonusRepFrom: 3,             // Dost ve üstü: pazarlığa +1 sabırla başlar
+  thresholds: [20, 40, 60, 80],   // Tanıdık, Müşteri, Dost, Sırdaş eşikleri
+  dcMod: [0, 0, -1, -2, -3],      // seviye başına zar eşiği indirimi (oyuncuya gösterilmez)
+  bonusRepFrom: 3,                // bu seviye ve üstü pazarlığa +1 sabırla başlar (5 = kapalı)
   gain: { buy: 2, offer: 5, deal: 1, gamble: -2, ret: -1, angered: -5 },
 };
+const LEVEL_NAMES = ['Yabancı', 'Tanıdık', 'Müşteri', 'Dost', 'Sırdaş'];
+// Etkin ayar: DM'in kaydettiği değerler varsayılanların üstüne biner.
+function affCfg() {
+  const o = (S.settings && S.settings.affinity) || {};
+  const c = { ...AFF_DEFAULT, ...o, gain: { ...AFF_DEFAULT.gain, ...(o.gain || {}) } };
+  c.levels = LEVEL_NAMES.map((n, i) => [n, i === 0 ? 0 : c.thresholds[i - 1]]);
+  return c;
+}
+const AFF = new Proxy({}, { get: (_, k) => affCfg()[k] });
 const affKey = (pid, mid) => `${pid}:${mid}`;
 const affOf = (pid, mid) => S.affinity[affKey(pid, mid)] ?? AFF.start;
 const affLevel = (v) => AFF.levels.reduce((idx, [, t], i) => (v >= t ? i : idx), 0);
@@ -122,7 +141,7 @@ function affView(pid, mid) {
 }
 function affChange(p, mid, delta, why) {
   let d = delta;
-  if (!d) return;
+  if (!d || !AFF.enabled) return;
   const k = affKey(p.id, mid), cur = affOf(p.id, mid);
   if (d > 0) {
     const w = (S.affinityWeek[k] = S.affinityWeek[k] && S.affinityWeek[k].week === S.week ? S.affinityWeek[k] : { week: S.week, gained: 0 });
@@ -149,6 +168,7 @@ const playerOf = (pid) => S.players.find((p) => p.id === pid) || fail('Oyuncu yo
 const charOf = (cid) => CHARS.find((c) => c.id === cid);
 const nkey = (pid, iid) => `${pid}:${iid}`;
 function assertUnlocked(p, item) {
+  if (!AFF.enabled) return;
   if ((item.minAffinity || 0) > affOf(p.id, item.merchantId)) fail('Bu eşya için yakınlığın yetmiyor.');
 }
 const bkey = (pid, mid) => `${pid}:${mid}`;
@@ -167,7 +187,7 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
 function getNeg(p, item, merchant) {
   const k = nkey(p.id, item.id);
-  return (S.negs[k] ||= E.newNegotiation(item, merchant.type, affLevel(affOf(p.id, merchant.id)) >= AFF.bonusRepFrom ? 1 : 0));
+  return (S.negs[k] ||= E.newNegotiation(item, merchant.type, AFF.enabled && affLevel(affOf(p.id, merchant.id)) >= AFF.bonusRepFrom ? 1 : 0));
 }
 
 function grant(p, item, paid, damaged, kind) {
@@ -211,10 +231,10 @@ function playerView(p) {
       id: m.id, name: m.name, emoji: m.emoji, portrait: m.portrait || null, banned: isBanned(p.id, m.id),
       revealed: S.revealed[bkey(p.id, m.id)] ? E.TYPES[m.type].name : null,
       insightTried: S.insightTries[`${bkey(p.id, m.id)}:${S.day}`] || null,
-      affinity: affView(p.id, m.id),
-      items: S.items.filter((i) => i.merchantId === m.id).map((i) => (i.minAffinity || 0) > affOf(p.id, m.id)
+      affinity: AFF.enabled ? affView(p.id, m.id) : null,
+      items: S.items.filter((i) => i.merchantId === m.id).map((i) => AFF.enabled && (i.minAffinity || 0) > affOf(p.id, m.id)
         ? { id: i.id, locked: true, need: i.minAffinity, needName: AFF.levels[affLevel(i.minAffinity)][0] }
-        : { id: i.id, name: i.name, price: i.price, magical: i.magical, stock: i.stock, minAffinity: i.minAffinity || 0, image: i.image || null, thumb: i.thumb || null }),
+        : { id: i.id, name: i.name, price: i.price, magical: i.magical, stock: i.stock, minAffinity: i.minAffinity || 0, image: i.image || null, thumb: i.thumb || null, desc: i.desc || '', type: i.type || null, rarity: i.rarity || 'none' }),
     })),
     negs,
   };
@@ -223,6 +243,7 @@ function dmView() {
   return {
     role: 'dm', day: S.day, week: S.week, bids: S.offers.map(offerView), ledger: S.ledger.slice(-150),
     affinity: S.players.flatMap((p) => S.merchants.map((m) => ({ playerId: p.id, merchantId: m.id, ...affView(p.id, m.id) }))),
+    settings: { affinity: (({ levels, ...r }) => r)(affCfg()), defaults: AFF_DEFAULT, levelNames: LEVEL_NAMES },
     chars: CHARS.map((c) => c.id),
     merchants: S.merchants, items: S.items, log: S.log.slice(-40),
     players: S.players.map((p) => ({ id: p.id, name: p.name, charId: p.charId, gold: p.gold, advantage: p.advantage, inventory: p.inventory })),
@@ -255,7 +276,7 @@ const P = {
     const neg = getNeg(p, item, m);
     const n = p.advantage ? 2 : 1;
     const rolls = Array.from({ length: n }, d20);
-    const dcMod = AFF.dcMod[affLevel(affOf(p.id, m.id))];
+    const dcMod = AFF.enabled ? AFF.dcMod[affLevel(affOf(p.id, m.id))] : 0;
     const e = E.haggle(neg, { X: item.price, type: m.type, Y: num(b.y, 0.01), approach, bonus: ch.bonus[approach], rolls, dcMod });
     if (e.roll !== null) p.advantage = false;
     if (neg.status === 'angered') S.bans[bkey(p.id, m.id)] = S.day;
@@ -334,9 +355,27 @@ const D = {
   },
   item(b) {
     merchantOf(b.merchantId);
+    const enumOf = (v, list, def, ad) => { const x = v === undefined || v === null || v === '' ? def : String(v); if (x !== def && !list.includes(x)) fail(`${ad} geçersiz`); return x; };
+    const data = {
+      merchantId: b.merchantId, name: text(b.name), price: num(b.price, 0.01), magical: !!b.magical,
+      stock: b.stock === null || b.stock === '' || b.stock === undefined ? null : Math.max(0, Math.floor(+b.stock)),
+      minAffinity: Math.max(0, Math.min(100, Math.floor(+b.minAffinity || 0))),
+      desc: String(b.desc ?? '').trim().slice(0, 200),
+      type: enumOf(b.type, ITEM_TYPES, null, 'Tür'),
+      rarity: enumOf(b.rarity, RARITIES, 'none', 'Nadirlik'),
+    };
     const it = b.id ? itemOf(b.id) : S.items[S.items.push({ id: id() }) - 1];
-    Object.assign(it, { merchantId: b.merchantId, name: text(b.name), price: num(b.price, 0.01), magical: !!b.magical, stock: b.stock === null || b.stock === '' || b.stock === undefined ? null : Math.max(0, Math.floor(+b.stock)), minAffinity: Math.max(0, Math.min(100, Math.floor(+b.minAffinity || 0))) });
+    Object.assign(it, data);
     for (const k of Object.keys(S.negs)) if (k.endsWith(`:${it.id}`)) delete S.negs[k];
+    return { id: it.id };
+  },
+  itemvariant(b) { // kopyala ve değiştir: eşyayı görselleriyle birlikte çoğaltır
+    const src = itemOf(b.id), nid = id();
+    const copy = { ...src, id: nid, name: text(b.name || `${src.name} (kopya)`) };
+    copy.image = copyMedia(src.image, nid, false);
+    copy.thumb = copyMedia(src.thumb, nid, true);
+    S.items.push(copy);
+    return { id: nid };
   },
   delete(b) {
     if (b.kind === 'merchant') {
@@ -408,6 +447,26 @@ const D = {
     if (b.kind === 'item') { const i = itemOf(b.id); unlinkMedia(i.image); unlinkMedia(i.thumb); i.image = i.thumb = null; }
     else if (b.kind === 'portrait') { const m = merchantOf(b.id); unlinkMedia(m.portrait); m.portrait = null; }
     else fail('Tür geçersiz');
+  },
+  affsettings(b) {
+    if (b.reset) { delete S.settings.affinity; log('DM: yakınlık ayarları varsayılana döndü'); return; }
+    const cur = affCfg();
+    const int = (v, min, max, ad) => { const n = Math.round(+v); if (!Number.isFinite(n) || n < min || n > max) fail(`${ad}: ${min} ile ${max} arasında olmalı`); return n; };
+    const arr = (v, len, min, max, ad) => { if (!Array.isArray(v) || v.length !== len) fail(`${ad}: ${len} değer olmalı`); return v.map((x) => int(x, min, max, ad)); };
+    const thresholds = b.thresholds === undefined ? cur.thresholds : arr(b.thresholds, 4, 1, 99, 'Seviye eşikleri');
+    for (let i = 1; i < 4; i++) if (thresholds[i] <= thresholds[i - 1]) fail('Seviye eşikleri artan olmalı');
+    const gain = { ...cur.gain };
+    for (const k of Object.keys(AFF_DEFAULT.gain)) if (b.gain && b.gain[k] !== undefined) gain[k] = int(b.gain[k], -20, 20, `Kazanç (${k})`);
+    S.settings.affinity = {
+      enabled: b.enabled === undefined ? cur.enabled : !!b.enabled,
+      start: b.start === undefined ? cur.start : int(b.start, 0, 100, 'Başlangıç'),
+      weeklyCap: b.weeklyCap === undefined ? cur.weeklyCap : int(b.weeklyCap, 0, 100, 'Haftalık tavan'),
+      thresholds,
+      dcMod: b.dcMod === undefined ? cur.dcMod : arr(b.dcMod, 5, -5, 0, 'Zar eşiği indirimi'),
+      bonusRepFrom: b.bonusRepFrom === undefined ? cur.bonusRepFrom : int(b.bonusRepFrom, 0, 5, 'Sabır bonusu seviyesi'),
+      gain,
+    };
+    log(`DM: yakınlık ayarlarını güncelledi (${S.settings.affinity.enabled ? 'açık' : 'kapalı'})`);
   },
   affinity(b) {
     const p = playerOf(b.playerId); merchantOf(b.merchantId);
@@ -523,15 +582,16 @@ async function api(req, res, url) {
       return send(res, 200, { token: t, role: 'dm' });
     }
     const a = auth(req.headers['x-token']) || fail('Giriş gerekli', 401);
+    let out;
     if (name.startsWith('dm/')) {
       if (a.role !== 'dm') fail('Yalnızca DM', 403);
-      (D[name.slice(3)] || fail('Yok', 404))(b);
+      out = (D[name.slice(3)] || fail('Yok', 404))(b);
     } else {
       if (a.role !== 'player') fail('Yalnızca oyuncu', 403);
       (P[name] || fail('Yok', 404))(a.p, b);
     }
     broadcast();
-    return send(res, 200, { ok: true });
+    return send(res, 200, { ok: true, ...(out || {}) });
   } catch (e) {
     if (e instanceof HttpError) return send(res, e.code, { error: e.message });
     if (/^(Teklif|Bu pazarlık|Bilinmeyen)/.test(e.message)) return send(res, 400, { error: e.message });

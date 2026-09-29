@@ -207,6 +207,80 @@ async function withServer(port, dice, fn) {
     assert.deepEqual(errs, []);
     await dc.close(); await pc.close();
   });
+
+  // 6) DM editörü, Yakınlık ayarları, QR ve yazarken canlı güncellemenin odağı bozmaması
+  await withServer(3116, '20', async (url) => {
+    const QR = require('../public/qr.js');
+    const addrFile = path.join(SP, 'address.json');
+    const inviteUrl = 'https://pazar.tail1234.ts.net';
+    require('fs').writeFileSync(addrFile, JSON.stringify({ url: inviteUrl, funnel: false }));
+    try {
+      const dc = await b.newContext({ viewport: { width: 1280, height: 900 } });
+      const pc = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+      const d = await dc.newPage(), p = await pc.newPage();
+      const errs = []; for (const pg of [d, p]) pg.on('pageerror', (e) => errs.push(e.message));
+      d.on('dialog', (x) => x.accept(x.defaultValue())); p.on('dialog', (x) => x.accept(x.defaultValue()));
+      await d.goto(url); await d.click('#dm'); await d.fill('#pin', '4321'); await d.click('#dmgo');
+      await p.goto(url); await p.click('[data-pick=ozan]'); await p.fill('#name', 'Edit'); await p.click('#go');
+      await p.waitForSelector('[data-mid=m1]');
+
+      // QR: tarayıcıda üretilen işaretleme Node'daki üreticiyle birebir aynı
+      await d.click('[data-dtab=players]'); await d.waitForSelector('.qr svg');
+      const expectedPath = /<path d="([^"]+)"/.exec(QR.svg(inviteUrl, { ecl: 'M' }))[1];
+      assert.ok((await d.locator('.qr path').getAttribute('d')) === expectedPath, 'tarayıcıdaki QR, Node üreticisiyle aynı olmalı');
+
+      // eşya editörü
+      await d.click('[data-dtab=market]');
+      await d.click('[data-addi="m1"]'); await d.waitForSelector('.modal');
+      await d.fill('#ed-name', 'Gümüş Tılsım'); await d.fill('#ed-desc', 'Soğuk bir tılsım.');
+      await d.selectOption('#ed-type', 'gem'); await d.selectOption('#ed-rarity', 'rare');
+      await d.fill('#ed-price', '77');
+      const [fc] = await Promise.all([d.waitForEvent('filechooser'), d.click('[data-act=edpick]')]);
+      await fc.setFiles({ name: 'tilsim.png', mimeType: 'image/png', buffer: makePng(200, 200) });
+      await d.waitForSelector('[data-act=edpick]:has-text("tilsim.png")');
+      await d.click('[data-act=edsave]'); await d.waitForSelector('.modal', { state: 'detached' });
+      await p.click('[data-mid=m1]');
+      await p.waitForSelector('.shelf .art.r-rare[style*="background-image"]');
+      assert.match(await p.textContent('.shelfitem:has(.art.r-rare) .pr'), /77/);
+      await p.locator('.shelfitem:has(.art.r-rare)').click();
+      assert.match(await p.textContent('.idesc'), /Soğuk bir tılsım/);
+      await p.click('[data-act=up]'); await p.click('[data-act=up]');
+
+      // varyant: kopya kendi kaydını taşır
+      await d.locator('.row:has-text("Gümüş Tılsım") [data-editi]').click(); await d.waitForSelector('.modal');
+      await d.click('[data-act=edcopy]'); await d.waitForSelector('#ed-name:has-text("")');
+      await d.waitForFunction(() => document.querySelector('#ed-name') && document.querySelector('#ed-name').value.includes('(kopya)'));
+      await d.click('[data-act=edcancel]');
+      assert.equal(await d.locator('.row:has-text("Gümüş Tılsım")').count(), 2);
+
+      // yazarken başka bir oyuncunun işlemi canlı güncelleme yollasa da odak ve metin korunur
+      await d.click('[data-addi="m1"]'); await d.waitForSelector('#ed-name');
+      const typing = d.locator('#ed-name').pressSequentially('Abcdef', { delay: 120 });
+      await p.click('[data-tab=bids]'); await p.click('[data-act=bidnew]'); await p.fill('#f-price', '1'); await p.fill('#f-name', 'X'); await p.click('[data-act=bidsend]'); // DM'e yayın yapan olay
+      await typing;
+      assert.equal(await d.inputValue('#ed-name'), 'Abcdef');
+      assert.equal(await d.evaluate(() => document.activeElement && document.activeElement.id), 'ed-name');
+      await d.click('[data-act=edcancel]');
+
+      // Yakınlık ayarları DM'in: başlangıç 40 => yeni oyuncu 'Müşteri' görür, kapatınca çubuk kaybolur
+      await d.click('[data-dtab=settings]'); await d.waitForSelector('#cfg-start');
+      await d.fill('#cfg-start', '40'); await d.click('[data-act=cfgsave]');
+      const pc2 = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+      const p2 = await pc2.newPage();
+      await p2.goto(url); await p2.click('[data-pick=druid]'); await p2.fill('#name', 'Sonra'); await p2.click('#go');
+      await p2.waitForSelector('[data-mid=m1] .affbar');
+      assert.match(await p2.textContent('[data-mid=m1] .affbar .rw'), /Müşteri/);
+      await d.click('[data-dtab=settings]'); await d.click('[data-cfgtoggle="0"]'); await d.click('[data-act=cfgsave]');
+      await p2.waitForFunction(() => document.querySelectorAll('.affbar').length === 0);
+      await d.click('[data-cfgtoggle="1"]'); await d.click('[data-act=cfgsave]');
+      await p2.waitForSelector('[data-mid=m1] .affbar');
+      // varsayılana dön
+      await d.click('[data-act=cfgreset]');
+      await p2.waitForFunction(() => /Tanıdık/.test((document.querySelector('[data-mid=m1] .affbar .rw') || {}).textContent || ''));
+      assert.deepEqual(errs, []);
+      await dc.close(); await pc.close(); await pc2.close();
+    } finally { try { require('fs').unlinkSync(addrFile); } catch {} }
+  });
   await b.close();
   console.log('E2E OK');
 })().catch((e) => { console.error(e); process.exit(1); });

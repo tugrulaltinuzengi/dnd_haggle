@@ -210,3 +210,25 @@ input[type=range]{flex:1;accent-color:var(--gold);height:40px}
 .repbar .rl,.affbar .rl{min-width:88px}
 
 .mini{display:inline-block;width:26px;height:26px;margin-right:8px;vertical-align:middle;border:1px solid var(--edge2);border-radius:2px;background-size:cover;background-position:center}
+
+/* eşya nadirlik çerçeveleri (rarite rengi, görsele gömülmez) */
+.art.r-common{border-color:#6f6a60}
+.art.r-uncommon{border-color:#4d7a45}
+.art.r-rare{border-color:#3f6a9c}
+.art.r-veryrare{border-color:#7a52b0;box-shadow:inset 0 0 0 1px #000,inset 0 0 26px #000d,0 0 12px #7a52b02a}
+.art.r-legendary{border-color:#b9752a;box-shadow:inset 0 0 0 1px #000,inset 0 0 26px #000d,0 0 14px #b9752a3a}
+.art.r-artifact{border-color:#a3342a;box-shadow:inset 0 0 0 1px #000,inset 0 0 26px #000d,0 0 16px #a3342a44}
+.idesc{margin:8px 2px 0;color:var(--mut);font-style:italic;text-align:center}
+
+/* DM ayar ve editör formları */
+.fld{display:block;margin:10px 0}
+.fld>span{display:block;margin-bottom:4px;font-family:var(--serif);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+.fld small{display:block;text-transform:none;letter-spacing:0;font-family:"Palatino Linotype",Palatino,Georgia,serif;color:var(--mut);font-size:12px}
+textarea{width:100%;padding:12px;border-radius:var(--r);border:1px solid var(--edge2);background:#080605;color:var(--ink);font:inherit;font-size:16px;box-shadow:inset 0 2px 8px #000;resize:vertical}
+.modal{position:fixed;inset:0;z-index:20;background:#000e;overflow:auto;padding:16px 12px 90px}
+.modal .card{max-width:520px;margin:0 auto}
+.qr{width:200px;max-width:70%;margin:6px auto 10px;background:#fff;padding:0;border-radius:2px;line-height:0}
+.qr svg{display:block;width:100%;height:auto}
+.tabs.dm button{font-size:11px;letter-spacing:.06em;padding:15px 0}
+
+.modal .two{align-items:end}

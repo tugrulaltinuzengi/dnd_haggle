@@ -12,6 +12,7 @@ let CH = [], S = null, auth = store.get(), es = null;
 let view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false, flt: 'all', form: false, f: { mid: null, iid: '', name: '', price: '', note: '' } };
 let pick = null, dmTab = 'live', toastT, dmFilter = 'new';
 let addr = null, addrTried = false, lf = { pid: '', kind: '' };
+let cfgDraft = null, edit = null; // DM: yakınlık ayarı taslağı, eşya editörü durumu
 
 function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2500); }
 async function api(path, body) {
@@ -32,7 +33,7 @@ function connect() {
     if (r) { auth = null; store.set(null); S = null; render(); } // sunucu ayakta ama token geçersiz
   };
 }
-function logout() { addr = null; addrTried = false; if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false, flt: 'all', form: false, f: { mid: null, iid: '', name: '', price: '', note: '' } }; render(); }
+function logout() { addr = null; addrTried = false; cfgDraft = null; edit = null; if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false, flt: 'all', form: false, f: { mid: null, iid: '', name: '', price: '', note: '' } }; render(); }
 
 // ---- görsel yükleme: tarayıcıda kırp + yeniden boyutlandır + yeniden kodla (EXIF gider), sunucu yine doğrular ----
 async function fitBlob(file, w, h, type, q) {
@@ -68,6 +69,79 @@ function pickImage(kind, id) {
   inp.click();
 }
 
+// ---- DM: Yakınlık ayarları (tüm değerler DM'e ait) ----
+function settingsView() {
+  const st = S.settings.affinity, df = S.settings.defaults, names = S.settings.levelNames;
+  const c = cfgDraft || (cfgDraft = JSON.parse(JSON.stringify(st)));
+  const num = (path, label, min, max, hint) => `<label class="fld"><span>${label}${hint ? `<small>${hint}</small>` : ''}</span><input type="number" inputmode="numeric" min="${min}" max="${max}" data-cfg="${path}" id="cfg-${path.replace(/\./g, '-')}" value="${esc(path.split('.').reduce((o, k) => (o == null ? o : o[k]), c))}"></label>`;
+  return `<h2>Yakınlık ayarları</h2>
+    <div class="card" style="text-align:left">
+      <p class="hint" style="text-align:left;margin-top:0">Yakınlık, oyuncunun bir satıcıyla uzun vadeli ilişkisidir (0–100). <b>Tüm değerler senin</b>: masa testine göre ayarla. Anlık Pazar barına dokunmaz.</p>
+      <div class="seg"><button class="${c.enabled ? 'on' : ''}" data-cfgtoggle="1">Açık</button><button class="${c.enabled ? '' : 'on'}" data-cfgtoggle="0">Kapalı</button></div>
+      <small>Kapalıyken çubuklar gizlenir, DC indirimi ve sabır bonusu uygulanmaz, kilitli eşyalar açılır, kazanç/kayıp durur (değerler saklanır).</small>
+      <h2>Başlangıç ve tavan</h2>
+      ${num('start', 'Başlangıç değeri', 0, 100, 'yeni oyuncu × satıcı')}
+      ${num('weeklyCap', 'Haftalık kazanç tavanı', 0, 100, 'satıcı başına, kayıplar sınırsız')}
+      <h2>Seviye eşikleri</h2>
+      ${[0, 1, 2, 3].map((i) => num(`thresholds.${i}`, names[i + 1], 1, 99, `${names[i]} → ${names[i + 1]} (varsayılan ${df.thresholds[i]})`)).join('')}
+      <h2>Zar eşiği indirimi</h2>
+      <p class="hint" style="text-align:left;margin-top:0">Seviye başına DC'den düşülen puan (0 ile −5). Oyuncuya gösterilmez.</p>
+      ${names.map((n, i) => num(`dcMod.${i}`, n, -5, 0, `varsayılan ${df.dcMod[i]}`)).join('')}
+      <h2>Sabır bonusu</h2>
+      <label class="fld"><span>Pazarlığa +1 sabırla başlama<small>bu seviye ve üstü</small></span><select data-cfg="bonusRepFrom" id="cfg-bonusRepFrom">${names.map((n, i) => `<option value="${i}" ${+c.bonusRepFrom === i ? 'selected' : ''}>${n}</option>`).join('')}<option value="5" ${+c.bonusRepFrom === 5 ? 'selected' : ''}>Kapalı</option></select></label>
+      <h2>Kazanç ve kayıp</h2>
+      ${[['buy', 'Alışveriş'], ['offer', 'Teklif teslimi'], ['deal', 'Anlaşma (kritik/başarı)'], ['gamble', 'Hard Gamble'], ['ret', 'Hakaret gibi teklif'], ['angered', 'Satıcı sinirlendi']].map(([k, l]) => num(`gain.${k}`, l, -20, 20, `varsayılan ${df.gain[k] > 0 ? '+' : ''}${df.gain[k]}`)).join('')}
+      <button class="btn" data-act="cfgsave">Kaydet</button>
+      <button class="btn ghost" data-act="cfgreset">Varsayılana dön</button>
+    </div>`;
+}
+function cfgPayload(c) {
+  const n = (v) => +v;
+  return { enabled: !!c.enabled, start: n(c.start), weeklyCap: n(c.weeklyCap), thresholds: c.thresholds.map(n), dcMod: c.dcMod.map(n), bonusRepFrom: n(c.bonusRepFrom), gain: Object.fromEntries(Object.entries(c.gain).map(([k, v]) => [k, n(v)])) };
+}
+
+// ---- DM: eşya editörü (ad, açıklama, tür, nadirlik, fiyat, stok, gereken yakınlık, görsel) ----
+function editorView() {
+  const e = edit, m = S.merchants.find((x) => x.id === e.merchantId);
+  const opt = (v, list) => list.map(([k, l]) => `<option value="${k}" ${String(v || '') === k ? 'selected' : ''}>${l}</option>`).join('');
+  return `<div class="modal"><div class="card" style="text-align:left">
+    <h2 style="margin-top:0">${e.id ? 'Eşyayı düzenle' : 'Yeni eşya'}${m ? ' · ' + esc(m.name) : ''}</h2>
+    <label class="fld"><span>Ad</span><input type="text" id="ed-name" maxlength="40" data-ed="name" value="${esc(e.name)}"></label>
+    <label class="fld"><span>Açıklama<small>oyuncu pazarlıkta görür</small></span><textarea id="ed-desc" maxlength="200" rows="3" data-ed="desc">${esc(e.desc)}</textarea></label>
+    <div class="two">
+      <label class="fld"><span>Tür</span><select id="ed-type" data-ed="type"><option value="">Otomatik</option>${opt(e.type, Object.entries(LABEL))}</select></label>
+      <label class="fld"><span>Nadirlik</span><select id="ed-rarity" data-ed="rarity">${opt(e.rarity || 'none', [['none', 'Yok'], ...Object.entries(RARITY).filter(([k]) => k !== 'none')])}</select></label>
+    </div>
+    <div class="two">
+      <label class="fld"><span>Fiyat (gp)</span><input type="number" inputmode="decimal" step="0.01" min="0" id="ed-price" data-ed="price" value="${esc(e.price)}"></label>
+      <label class="fld"><span>Stok<small>boş = sınırsız</small></span><input type="number" inputmode="numeric" min="0" id="ed-stock" data-ed="stock" value="${esc(e.stock)}"></label>
+    </div>
+    <div class="two">
+      <label class="fld"><span>Gereken yakınlık<small>0 = herkes görür</small></span><input type="number" inputmode="numeric" min="0" max="100" id="ed-min" data-ed="minAffinity" value="${esc(e.minAffinity)}"></label>
+      <label class="fld"><span>Büyülü<small>Hard Gamble olmaz</small></span><select id="ed-magical" data-ed="magical"><option value="0" ${e.magical ? '' : 'selected'}>Hayır</option><option value="1" ${e.magical ? 'selected' : ''}>Evet</option></select></label>
+    </div>
+    <button class="btn ghost" data-act="edpick">${e.file ? 'Görsel: ' + esc(e.file.name) : e.hasImage ? 'Görseli değiştir' : 'Görsel seç'}</button>
+    <button class="btn" data-act="edsave">Kaydet</button>
+    ${e.id ? '<button class="btn ghost" data-act="edcopy">Kopyasını oluştur (varyant)</button>' : ''}
+    <button class="btn ghost" data-act="edcancel">Vazgeç</button>
+  </div></div>`;
+}
+function openEditor(merchantId, it) {
+  edit = it
+    ? { id: it.id, merchantId: it.merchantId, name: it.name, desc: it.desc || '', type: it.type || '', rarity: it.rarity || 'none', price: it.price, stock: it.stock ?? '', minAffinity: it.minAffinity || 0, magical: !!it.magical, hasImage: !!it.image, file: null }
+    : { id: null, merchantId, name: '', desc: '', type: '', rarity: 'none', price: '', stock: '', minAffinity: 0, magical: false, hasImage: false, file: null };
+  render();
+}
+async function saveEditor(closeAfter = true) {
+  const e = edit;
+  const body = { merchantId: e.merchantId, name: e.name, desc: e.desc, type: e.type, rarity: e.rarity, price: e.price, stock: e.stock, minAffinity: e.minAffinity, magical: !!e.magical };
+  if (e.id) body.id = e.id;
+  const r = await api('dm/item', body);
+  if (e.file) await uploadImage('item', r.id, e.file);
+  if (closeAfter) { edit = null; render(); toast('Eşya kaydedildi'); }
+  return r.id;
+}
+
 async function loadAddr() {
   try { const r = await fetch('/api/address', { headers: { 'x-token': auth.token } }); addr = await r.json(); render(); } catch {}
 }
@@ -76,7 +150,7 @@ function lockedSlot(i) {
 }
 function addrCard() {
   return `<h2>Davet adresi</h2><div class="card" style="text-align:left">${addr && addr.url
-    ? `<div class="price" style="white-space:normal;word-break:break-all">${esc(addr.url)}</div><small>${addr.funnel ? 'Herkese açık (Funnel)' : 'Tailscale ağı'} · oyuncular bu adresi açar</small><div class="tl"><button class="btn sm ghost" data-act="copyaddr">Kopyala</button><button class="btn sm ghost" data-act="shareaddr">Paylaş</button></div>`
+    ? `${(() => { try { return `<div class="qr">${QR.svg(addr.url, { ecl: 'M' })}</div>`; } catch { return ''; } })()}<div class="price" style="white-space:normal;word-break:break-all">${esc(addr.url)}</div><small>${addr.funnel ? 'Herkese açık (Funnel)' : 'Tailscale ağı'} · oyuncular bu adresi açar</small><div class="tl"><button class="btn sm ghost" data-act="copyaddr">Kopyala</button><button class="btn sm ghost" data-act="shareaddr">Paylaş</button></div>`
     : '<small>Adres yok. Sunucuda <b>npm run tailscale</b> çalıştır, sonra bu sayfayı yenile.</small>'}</div>`;
 }
 function ledgerFilters() {
@@ -91,6 +165,7 @@ const SRV = () => (window.PazarApp ? '<button class="btn ghost" id="srv">Sunucu 
 
 // Eşya türü (v2'de kütüphane `type` alanı gelene kadar addan tahmin edilir).
 const LABEL = { weapon: 'Silah', armor: 'Zırh', potion: 'İksir', scroll: 'Tomar', gem: 'Tılsım', gear: 'Gereç', other: 'Eşya' };
+const RARITY = { none: '', common: 'Sıradan', uncommon: 'Seyrek', rare: 'Nadir', veryrare: 'Çok nadir', legendary: 'Efsanevi', artifact: 'Artefakt' };
 const TYPE_RULES = [
   ['potion', /iksir|şifa|panzehir|merhem/],
   ['weapon', /kılıç|hançer|balta|mızrak|yay\b|ok\b|gürz|tokmak|çekiç|pala|kama|arbalet|asa\b|değnek/],
@@ -100,6 +175,7 @@ const TYPE_RULES = [
   ['gear', /\bip\b|çadır|meşale|çanta|sırt|battaniye|kazma|kürek|fener|yağ|erzak|yiyecek|alet|anahtar|kilit|maymuncuk/],
 ];
 function itemType(i) {
+  if (i.type && LABEL[i.type]) return i.type; // DM türü seçtiyse ad tahmini kullanılmaz
   const n = String(i.name).toLocaleLowerCase('tr');
   for (const [cat, re] of TYPE_RULES) if (re.test(n)) return cat;
   return 'other';
@@ -109,10 +185,11 @@ const BAG_SLOTS = 18;
 
 // Görsel alanı: görsel varsa arka plan, yoksa yazı kutusu (tür + ad).
 function art(i, { cls = '', label = null, extra = '', thumb = false } = {}) {
-  const lb = label || (i.magical ? 'Büyülü · ' : '') + LABEL[itemType(i)];
+  const rar = i.rarity && i.rarity !== 'none' ? i.rarity : '';
+  const lb = label || [i.magical ? 'Büyülü' : '', RARITY[rar] || '', LABEL[itemType(i)]].filter(Boolean).join(' · ');
   const src = thumb ? i.thumb || i.image : i.image;
-  if (src) return `<span class="art ${cls} ${i.magical ? 'mg' : ''}" title="${esc(i.name)}" style="background-image:url('${esc(src)}')">${extra}</span>`;
-  return `<span class="art ${cls} ${i.magical ? 'mg' : ''}"><span class="artlabel">${esc(lb)}</span><span class="artname">${esc(i.name)}</span>${extra}</span>`;
+  if (src) return `<span class="art ${cls} ${i.magical ? 'mg' : ''} ${rar ? 'r-' + rar : ''}" title="${esc(i.name)}" style="background-image:url('${esc(src)}')">${extra}</span>`;
+  return `<span class="art ${cls} ${i.magical ? 'mg' : ''} ${rar ? 'r-' + rar : ''}"><span class="artlabel">${esc(lb)}</span><span class="artname">${esc(i.name)}</span>${extra}</span>`;
 }
 function portrait(m, opt = {}) {
   const bg = m.portrait ? ` style="background-image:url('${esc(m.portrait)}')"` : '';
@@ -248,6 +325,7 @@ function renderNegotiation(me) {
     ${portrait(m, { small: true, noAff: true })}
     <div class="bubble">${esc(line)}</div>
     ${art(i, { cls: 'xl' })}
+    ${i.desc ? `<p class="idesc">${esc(i.desc)}</p>` : ''}
     <div class="bigprice">${price !== i.price ? `<s>${fmt(i.price)}</s>` : ''}${fmt(price)} gp</div></div><div class="nr">
     ${view.rolling ? '<div class="dice">Zar atılıyor</div>' : last ? `<div class="result ${last.outcome}">${OUT[last.outcome][0]}${last.roll !== null ? `<small>Zar ${last.rolls.length > 1 ? last.rolls.join(' / ') + ' → ' : ''}${last.roll} + ${last.bonus} = ${last.total}</small>` : ''}<small>${OUT[last.outcome][1]}</small></div>` : ''}
     ${canHaggle && !view.rolling ? `
@@ -271,8 +349,8 @@ const OUT_TR = { crit: 'Kritik', success: 'Başarı', fail: 'Başarısız', ret:
 const ST_TR = { open: 'sürüyor', deal: 'anlaşıldı', angered: 'kapandı' };
 
 function renderDM() {
-  const dtabs = [['live', 'Canlı'], ['bids', 'Teklif'], ['market', 'Pazar'], ['players', 'Kişi'], ['ledger', 'Defter']];
-  const tabs = `<nav class="tabs">${dtabs.map(([k, l]) => `<button data-dtab="${k}" class="${dmTab === k ? 'on' : ''}">${l}${k === 'bids' && S.bids.some((b) => b.status === 'new') ? '<i class="dot"></i>' : ''}</button>`).join('')}<button data-act="logout">Çık</button></nav>`;
+  const dtabs = [['live', 'Canlı'], ['bids', 'Teklif'], ['market', 'Pazar'], ['players', 'Kişi'], ['ledger', 'Defter'], ['settings', 'Ayar']];
+  const tabs = `<nav class="tabs dm">${dtabs.map(([k, l]) => `<button data-dtab="${k}" class="${dmTab === k ? 'on' : ''}">${l}${k === 'bids' && S.bids.some((b) => b.status === 'new') ? '<i class="dot"></i>' : ''}</button>`).join('')}<button data-act="logout">Çık</button></nav>`;
   const head = `<div class="top"><span class="pill">DM</span><span class="pill">Hf ${S.week} · Gn ${S.day}</span><button class="btn sm ghost" data-act="newday">Yeni Gün</button></div>`;
   let body = '';
   if (dmTab === 'live') {
@@ -306,6 +384,8 @@ function renderDM() {
         ${S.merchants.map((m) => { const a = S.affinity.find((x) => x.playerId === p.id && x.merchantId === m.id); return a ? `<div class="row affrow"><span class="grow">${esc(m.name)}</span>${affbar(a, { sm: true, label: false })}<button class="btn sm ghost" data-aff="${p.id}|${m.id}|-5">−5</button><button class="btn sm ghost" data-aff="${p.id}|${m.id}|5">+5</button></div>` : ''; }).join('')}
         <div class="tl"><button class="btn sm ghost" data-gold="${p.id}|-10">−10</button><button class="btn sm ghost" data-gold="${p.id}|10">+10</button><button class="btn sm ghost" data-gold="${p.id}|100">+100</button><button class="btn sm ghost" data-goldset="${p.id}">Ayarla</button></div>
         <div class="tl"><button class="btn sm ${p.advantage ? '' : 'ghost'}" data-adv="${p.id}|${p.advantage ? 0 : 1}">Avantaj ${p.advantage ? 'AÇIK' : 'ver'}</button><button class="btn sm ghost" data-sendbid="${p.id}">Teklif gönder</button><button class="btn sm ghost" data-del="player|${p.id}">Sil</button></div></div>`).join('') || '<p class="empty">Kimse yok.</p>'}</div>`;
+  } else if (dmTab === 'settings') {
+    body = settingsView();
   } else {
     const L = S.ledger.slice().reverse().filter((e) => (!lf.pid || e.playerId === lf.pid) && (!lf.kind || e.kind === lf.kind));
     const spent = -L.filter((e) => e.amount < 0).reduce((a, e) => a + e.amount, 0);
@@ -313,7 +393,7 @@ function renderDM() {
     body = `<h2>Alışveriş defteri</h2>${ledgerFilters()}<div class="stat3" style="margin-top:10px"><div class="card"><b>${fmt(spent)}</b><small>harcanan</small></div><div class="card"><b>${fmt(granted)}</b><small>DM'in verdiği</small></div><div class="card"><b>${L.length}</b><small>işlem</small></div></div>
       ${L.map((e) => led(e, pname(e.playerId) + ' · ' + (S.merchants.find((m) => m.id === e.merchantId) ? esc(S.merchants.find((m) => m.id === e.merchantId).name) + ' · ' : ''))).join('') || '<p class="empty">Henüz işlem yok.</p>'}`;
   }
-  $app.innerHTML = head + `<div class="dmpane">${body}</div>` + tabs;
+  $app.innerHTML = head + `<div class="dmpane">${body}</div>` + tabs + (edit ? editorView() : '');
 }
 
 // ---------- render ----------
@@ -327,6 +407,9 @@ function render() {
 
 // ---------- olaylar ----------
 $app.addEventListener('change', (e) => {
+  const t = e.target;
+  if (t.dataset && t.dataset.cfg !== undefined && cfgDraft) { const path = t.dataset.cfg.split('.'); let o = cfgDraft; while (path.length > 1) o = o[path.shift()]; o[path[0]] = t.value; return; }
+  if (t.dataset && t.dataset.ed !== undefined && edit) { edit[t.dataset.ed] = t.dataset.ed === 'magical' ? t.value === '1' : t.value; return; }
   if (e.target.id === 'lf-p') { lf.pid = e.target.value; return render(); }
   if (e.target.id === 'lf-k') { lf.kind = e.target.value; return render(); }
   const f = view.f;
@@ -334,6 +417,9 @@ $app.addEventListener('change', (e) => {
   if (e.target.id === 'f-i') { f.iid = e.target.value; render(); }
 });
 $app.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t.dataset && t.dataset.cfg !== undefined && cfgDraft) { const path = t.dataset.cfg.split('.'); let o = cfgDraft; while (path.length > 1) o = o[path.shift()]; o[path[0]] = t.value; return; }
+  if (t.dataset && t.dataset.ed !== undefined && edit) { edit[t.dataset.ed] = t.dataset.ed === 'magical' ? t.value === '1' : t.value; return; }
   const f = view.f, k = { 'f-name': 'name', 'f-price': 'price', 'f-note': 'note' }[e.target.id];
   if (k) f[k] = e.target.value;
   if (e.target.id === 'yr') { view.y = +e.target.value; const n = document.getElementById('ynum'); if (n) n.textContent = fmt(view.y); }
@@ -386,14 +472,21 @@ $app.addEventListener('click', async (e) => {
   if (d.price) { const [p, i] = d.price.split('|'); const v = prompt('Yeni fiyat (gp):'); return void (v && act('dm/setprice', { playerId: p, itemId: i, price: v })); }
   if (d.mtype) { const [id, type] = d.mtype.split('|'); const m = S.merchants.find((x) => x.id === id); return void act('dm/merchant', { id, name: m.name, type }); }
   if (d.editm) { const m = S.merchants.find((x) => x.id === d.editm); const name = prompt('Satıcı adı:', m.name); if (!name) return; return void act('dm/merchant', { id: m.id, name, type: m.type }); }
-  if (d.addi) { const name = prompt('Eşya adı:'); if (!name) return; const price = prompt('Fiyat (gp):'); if (!price) return; const magical = confirm('Büyülü mü? (Hard Gamble yasak olur)'); const stock = prompt('Stok (boş = sınırsız):', ''); const minAffinity = prompt('Gereken yakınlık 0-100 (0 = herkes görür):', '0'); return void act('dm/item', { merchantId: d.addi, name, price, magical, stock, minAffinity }); }
-  if (d.editi) { const i = S.items.find((x) => x.id === d.editi); const name = prompt('Eşya adı:', i.name); if (!name) return; const price = prompt('Fiyat (gp):', i.price); if (!price) return; const magical = confirm('Büyülü mü?'); const stock = prompt('Stok (boş = sınırsız):', i.stock ?? ''); const minAffinity = prompt('Gereken yakınlık 0-100 (0 = herkes görür):', i.minAffinity || 0); return void act('dm/item', { id: i.id, merchantId: i.merchantId, name, price, magical, stock, minAffinity }); }
+  if (d.addi) return void openEditor(d.addi, null);
+  if (d.editi) return void openEditor(null, S.items.find((x) => x.id === d.editi));
+  if (d.cfgtoggle !== undefined) { cfgDraft.enabled = d.cfgtoggle === '1'; return render(); }
   if (d.del) { const [kind, id] = d.del.split('|'); if (confirm('Silinsin mi?')) act('dm/delete', { kind, id }); return; }
   if (d.gold) { const [id, delta] = d.gold.split('|'); const p = S.players.find((x) => x.id === id); return void act('dm/player', { id, gold: Math.max(0, p.gold + +delta) }); }
   if (d.goldset) { const v = prompt('Altın:'); return void (v !== null && act('dm/player', { id: d.goldset, gold: v })); }
   if (d.adv) { const [id, v] = d.adv.split('|'); return void act('dm/player', { id, advantage: v === '1' }); }
   switch (d.act) {
     case 'logout': return logout();
+    case 'cfgsave': try { await api('dm/affsettings', cfgPayload(cfgDraft)); cfgDraft = null; toast('Ayarlar kaydedildi'); render(); } catch {} return;
+    case 'cfgreset': if (confirm('Yakınlık ayarları varsayılana dönsün mü?')) { try { await api('dm/affsettings', { reset: true }); cfgDraft = null; render(); } catch {} } return;
+    case 'edpick': { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = () => { if (inp.files[0]) { edit.file = inp.files[0]; render(); } }; inp.click(); return; }
+    case 'edsave': try { await saveEditor(true); } catch {} return;
+    case 'edcopy': { try { const nid = await saveEditor(false); const r = await api('dm/itemvariant', { id: nid, name: `${edit.name} (kopya)` }); edit = null; render(); toast('Kopya oluşturuldu'); const it = S.items.find((x) => x.id === r.id); if (it) openEditor(null, it); } catch {} return; }
+    case 'edcancel': edit = null; return render();
     case 'copyaddr': try { await navigator.clipboard.writeText(addr.url); toast('Adres kopyalandı'); } catch { prompt('Adresi kopyala:', addr.url); } return;
     case 'shareaddr': if (navigator.share) { try { await navigator.share({ title: 'Pazar', url: addr.url }); } catch {} } else { try { await navigator.clipboard.writeText(addr.url); toast('Adres kopyalandı'); } catch { prompt('Adresi kopyala:', addr.url); } } return;
     case 'csv': {
