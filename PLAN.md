@@ -42,4 +42,4 @@ Formül f = X − a·u/2 · DC 12 / 15 / 18 · Rep 4 / 3 / 2 · Y < X/4 zarsız 
 - [ ] DC, Rep ve fiyatlara göre ayar, sürüm etiketi `v1.0`.
 
 ## v2 (sonraki sürüm, yerel)
-Konuşan portreler (5 ağız karesi, gerçekçi fantazi) ve görselli eşya kütüphanesi: [PLAN_V2.md](PLAN_V2.md). Sunucu DM'in bilgisayarında koşar (LAN), ticari değil. The Crooked Moon lisanslı. Telifli görsel, kitap metni ve 5e.tools verisi herkese açık depoya girmez, yerel klasörlerde kalır. Render/APK yayın adımları (Aşama 5) yerel çalışma tercih edildiği için beklemede.
+Konuşan portreler (5 ağız karesi, gerçekçi fantazi) ve görselli eşya kütüphanesi: [PLAN_V2.md](PLAN_V2.md). Sunucu DM'in bilgisayarında koşar (LAN), ticari değil. The Crooked Moon lisanslı. Telifli görsel, kitap metni ve 5e.tools verisi herkese açık depoya girmez, yerel klasörlerde kalır. Oyuncular aynı odada olmak zorunda değil (CRM gibi, eşzamansız): uzaktan erişim için Cloudflare Tunnel önerilir. Karanlık tema (Darkest Dungeon ağırlıklı) ilk geçişle uygulandı. Render/APK yayın adımları (Aşama 5) yerel çalışma tercih edildiği için beklemede.

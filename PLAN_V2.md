@@ -5,6 +5,7 @@
 **Çerçeve (kesinleşti):**
 - **Yerel çalışır.** Sunucu DM'in bilgisayarında koşar, oyuncular aynı ağdan (Wi-Fi) bağlanır. Render ve bulut bu sürümün konusu değil.
 - **Satılmaz, ticari değil.** Kendi masamız için.
+- **Eşzamansız (CRM gibi):** Oyuncuların aynı odada olması gerekmez. Teklifler DM çevrimdışıyken bırakılır, DM sonra cevaplar. **Uzaktan erişim bu yüzden öne alındı** (Bölüm 2).
 - **The Crooked Moon lisanslı** (satın alınmış). Eşyaları ve görselleri DM'in sahip olduğu kopyadan alınır.
 - **Görsel stil:** portreler ve eşyalar **gerçekçi fantazi**.
 
@@ -28,12 +29,13 @@ Bu hukuki tavsiye değildir.
 
 | # | Karar | Durum |
 |---|---|---|
-| K1 | Çalışma modeli | ✅ Yerel sunucu, LAN. Uzaktaki oyuncular için isteğe bağlı tünel (Tailscale ya da Cloudflare Tunnel), sonraki aşama. |
+| K1 | Çalışma modeli | ✅ Sunucu DM'in bilgisayarında. Oyuncular **uzaktan** bağlanır: öneri **Cloudflare Tunnel** (HTTPS adresi, oyuncuya kurulum yok) ya da Tailscale (özel ağ). Aynı odadakiler için LAN yedeği. |
 | K2 | Depolama | ✅ Yerel disk: `app/media/` (görseller), `app/data/` (durum). Bulut ve Render diski **gerekmez**. Yedek betiği eklenir. |
 | K3 | Portre stili | ✅ Gerçekçi fantazi (insan, elf, cüce, ork, tiefling…). Bu, ağız yöntemini belirliyor (bkz. A). |
 | K4 | Eşya stili | ✅ Gerçekçi fantazi. Kaynaklar arası stil farkı için çerçeve ve kadraj normalizasyonu (bkz. B). |
 | K5 | Görsel biçimi | Eşya: **PNG** (saydam), 512×512 + 128×128 küçük resim. Portre: PNG sprite sayfası, kare başı 768×768, 5 kare yan yana. |
-| K6 | APK | ✅ LAN'daki `http://` adrese bağlanmak için **cleartext izni** açılır (yalnızca yerel ağ kullanımında kabul edilebilir). |
+| K6 | APK | ✅ Tünel HTTPS verdiği için APK `https://` ile çalışır (bugünkü ayar yeterli). LAN yedeği için `http://` gerekirse **cleartext izni** ayrı bir seçenek olarak eklenir. |
+| K11 | Görsel tema | ✅ Karanlık, kirli, elle çizilmiş his: **Darkest Dungeon ağırlıklı**, Isaac'ten fiyat ve sayaç dili, mobile uyarlanmış (Bölüm 2b). İlk geçiş uygulandı. |
 | K7 | Kaynak dosyaların yeri | ⬜ DM belirler: Crooked Moon Foundry paketi mi, elle giriş mi? 5e.tools yerel kopyası nerede? |
 | K8 | Satıcının kendi eşyası | ✅ Satıcı eşya üretir, kendi görselini yükler. Eşyalar `owner` alanı taşır (ileride oyuncu tezgâhı için hazır). |
 | K9 | Görsel bulma yöntemi | ⬜ Öneri: **yerel üretim** (tutarlı gerçekçi fantazi stili) + Openverse/Wikimedia (sıradan eşyalar) + DM'in kendi görselleri. DM donanımı (GPU) ve tercihi belirler. |
@@ -41,15 +43,50 @@ Bu hukuki tavsiye değildir.
 
 ---
 
-## 2. Yerel çalıştırma (v1.1'in ön koşulu)
+## 2. Yerel çalıştırma ve uzaktan erişim (v1.1'in ön koşulu)
 
-Bulut gidince şunlar önem kazanıyor:
-- **Adres bulma:** Sunucu açılışta LAN adreslerini yazar (`http://192.168.x.x:3000`). DM ekranı adresi **QR koduyla** gösterir, oyuncu kameradan okutup açar. IP değişirse APK'nın "⚙️ Sunucu adresi" düğmesi zaten var.
-- **PWA sınırı:** Tarayıcıdan "Ana ekrana ekle" ve service worker, `http://` LAN adreslerinde çalışmaz (güvenli bağlam ister). Bu yüzden **oyuncular için asıl yol APK**. Tarayıcıda sayfa yine açılır.
-- **Güvenlik duvarı:** 3000 portu yerel ağa açılır (Windows/macOS uyarısı için kısa rehber).
-- **DM_PIN:** Yerelde de zorunlu kalsın (aynı Wi-Fi'deki herkes DM olamasın).
+Sunucu DM'in bilgisayarında, oyuncular başka yerlerde. Bu yüzden asıl mesele **erişim**:
+
+| Yol | Nasıl | Artı | Eksi |
+|---|---|---|---|
+| **Cloudflare Tunnel** (öneri) | DM'in makinesinde `cloudflared` ile HTTPS adresi açılır | Oyuncuya kurulum yok, **HTTPS** (PWA ve APK sorunsuz), güvenlik duvarı ayarı yok | Hızlı tünelde adres her açılışta değişir. Sabit adres için alan adı ve adlandırılmış tünel gerekir |
+| **Tailscale** | Herkes uygulamayı kurar, DM'in makinesine özel adresle bağlanır | Kapalı ağ, kalıcı adres | Her oyuncu kurulum yapar |
+| **LAN** | Aynı Wi-Fi'de `http://192.168.x.x:3000` | Ek araç yok | Sadece aynı ağ, `http://` olduğu için PWA yok |
+| **Bulut** (ileride) | Render Starter + disk | DM'in bilgisayarı kapalıyken de açık | Ücret, yerel tercihinizle çelişir |
+
+Yapılacaklar:
+- Sunucu açılışta adresleri yazar (yerel ve varsa tünel). DM ekranı adresi **QR kodu ve paylaşma düğmesiyle** gösterir.
+- **`npm run tunnel`**: `cloudflared` kurulu mu kontrol eder, tüneli açar, adresi ekrana yazar ve DM ekranına iletir. Adres değişirse oyuncuya gösterilecek **davet bağlantısı** yenilenir.
+- **Eşzamansızlık:** Teklifler DM çevrimdışıyken de bırakılabildiği için *DM'in makinesi açık olmalı* (sunucu). DM uygulamada değilken bile sunucu teklifleri saklar. Makine kapalıysa kimse bağlanamaz: bilinen sınır. Kalıcı çözüm küçük bir hep-açık makine (mini PC) ya da bulut.
+- **Bildirimler (isteğe bağlı, V11):** DM cevap verince oyuncuya bildirim. HTTPS üzerinde Web Push, APK'da yerel bildirim. Çekirdek plana girmez, teklif akışı bildirimsiz de çalışır.
+- **DM_PIN:** Tünel herkese açık bir adres olduğu için PIN **zorunlu ve güçlü** olmalı. Yanlış PIN denemesine hız sınırı eklenir.
 - **Yedek:** `npm run backup` → `app/data/` ve `app/media/` tarihli zip.
 - **Başlatma:** `npm start` yeterli, ayrıca çift tıkla başlatan betik (`start.bat`, `start.sh`).
+
+---
+
+## 2b. Görsel tema (UI), referanslı
+
+**Referanslar:** Darkest Dungeon *Provision* ve *The Hoarder* ekranları ve The Binding of Isaac dükkânı. Yalnızca **düzen, renk ve his** alınır. Oyunların sanat varlıkları (portre, ikon, doku) **kullanılmaz**, tüm görseller kendimizin ya da yerel üretimin.
+
+**Referanstan mobile uyarlama**
+| Referans | Mobil karşılığı |
+|---|---|
+| Solda ışıkta oturan satıcı, altta kararan vinyet | Üstte tam genişlikte **satıcı portresi**, kenarlarda vinyet ve alta doğru kararma. Köşede satıcının künye plakası (küçük çerçeveli simge + adı) |
+| Sağ üstte çerçeveli **eşya slotları**, altında altın simgeli fiyat | Aşağıda 3 sütunlu **raf**, slotlar yüksek dikdörtgen çerçeveli, altında **altın simgeli fiyat** |
+| Sağ altta envanter ızgarası (8 sütun) | **Çanta:** 4 sütunlu slot ızgarası, boş slotlar koyu, kapasite sayacı (5/20), kusurlu eşyada 🩹 |
+| Hoarder: üstte simge sekmeleri (tümü, silah, …) | Rafta **süzgeç simgeleri** (tümü, silah, zırh, iksir, büyülü) |
+| Isaac: eşyanın altında büyük fiyat, köşede sayaçlar | Fiyat büyük ve okunaklı, üstte **altın/hafta-gün sayaçları** (HUD) |
+| Kısa ipucu satırı (`[CLICK] inventory to sell back`) | Sayfa altında italik ipucu satırı ("Eşyaya dokun, pazarlığa başla.") |
+
+**Tasarım dili:** yakın siyah zemin, kirli kahverengi paneller, çift kenarlıklı ve iç gölgeli çerçeveler, **soluk altın** (`#c9a24e`) ve **kan kırmızısı** vurgular, parşömen renkli metin. Başlıklar geniş harf aralıklı **serif büyük harf** (Cinzel/Palatino yedekli, çevrimdışı güvenli). Hafif tuval dokusu ve vinyet, düğmeler koyu kırmızı zemin + altın kenar, pazarlık sonucu kartları kritikte altın parıltı, sinirlenmede kırmızı.
+
+**Durum:**
+- ✅ İlk geçiş uygulandı: renkler, tipografi, dokular, portre penceresi, künye plakası, raf, filtreler, çanta ızgarası, simgeli alt çubuk, pazarlık ve sonuç kartları.
+- ⏳ Portre ve eşya görselleri gelene kadar **emoji yer tutucu** (sepya filtreli) kullanılıyor. Görsel alanları hazır (`portrait` ve eşya küçük resmi), V3–V8 dolduracak.
+- ⏳ Cila: eşya slotlarında rarite çerçevesi, konuşan portre (V4–V5), Isaac tarzı piksel sayaç yazı tipi, ses ve titreşim geri bildirimi (isteğe bağlı).
+
+**Bitiş ölçütleri:** 360–430 px genişlikte hiçbir ekranda yatay kaydırma yok. Dokunma hedefleri ≥ 44 px. Metin kontrastı okunaklı (parşömen/koyu zemin ≥ 7:1, soluk metin ≥ 4.5:1). Tema tek bir CSS dosyasında değişkenlerle tutulur.
 
 ---
 
@@ -192,8 +229,9 @@ Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yöne
 
 | Sürüm | Aşama | İş | Boyut |
 |---|---|---|---|
-| — | **V0** Karar kilidi | K7 ve K9: kaynak dosyalar nerede, GPU var mı, hangi üretici? | S |
-| v1.1 | **V1** Yerel çalıştırma | LAN adresleri, QR, güvenlik duvarı rehberi, yedek betiği, başlatma betikleri, APK cleartext izni | M |
+| — | **V0** Karar kilidi | K7 ve K9: kaynak dosyalar nerede, GPU var mı, hangi üretici? Tünel türü? | S |
+| ✅ | **V0b** Tema, ilk geçiş | Karanlık tema, portre penceresi, raf, çanta ızgarası, filtreler, simgeli çubuk (Bölüm 2b) | M |
+| v1.1 | **V1** Yerel çalıştırma ve uzaktan erişim | `npm run tunnel` (Cloudflare Tunnel), davet bağlantısı ve QR, PIN hız sınırı, yedek betiği, başlatma betikleri, LAN yedeği | M |
 | v1.1 | **V2** Medya katmanı | `/api/media` yükleme (boyut, tür, yeniden kodlama, kare kırpma), yerel disk, `/media` sunumu, önbellek, testler | M |
 | v1.1 | **V3** Satıcı eşya üretimi | Eşya editörü, **kendi görseli** (kamera/galeri), varyant üret, `owner` alanı, tür ikonları, rarite çerçeveleri | M |
 | v1.1 | **V4** Portre + ağız kareleri | Yükleme, yüz işareti + ağ deformasyonu, ağız içi dokuları, yedek 2 dokunuş yolu, önizleme ve ince ayar, sprite kaydı | L |
@@ -202,7 +240,8 @@ Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yöne
 | v1.2 | **V7** Görsel bulucu otomasyonu | İsim kuyruğu, `item-image-finder`/`-judge`/`-processor` subagent'ları, `generate-local`, Openverse/Wikimedia, arka plan silme, kaldığı yerden devam, rapor | L |
 | v1.2 | **V8** DM seçici, onay ekranı, şablonlar | Kütüphane ızgarası, süzgeç, otomatik doldurma, **görsel onay kuyruğu**, dükkân şablonları | L |
 | v2.0 | **V9** Crooked Moon | 26 eşyanın içe aktarımı ya da elle girişi, ekran doğrulaması | S |
-| v2.0 | **V10** APK ve sürüm | `versionCode 2`, görsel önbelleği, cihazda test, uzaktaki oyuncular için isteğe bağlı tünel rehberi | M |
+| v2.0 | **V10** APK ve sürüm | `versionCode 2`, görsel önbelleği, cihazda test | M |
+| v2.x | **V11** Bildirimler (isteğe bağlı) | DM cevap verince oyuncuya bildirim (Web Push / APK yerel bildirim) | M |
 
 **Sıra:** V1–V2 tüm özelliklerin temeli. **V3 (satıcı kendi eşyası ve görseli) medya katmanından hemen sonra gelir**, çünkü kütüphane ve otomasyon olmadan da işe yarar. Portre (V4–V5) ve kütüphane (V6–V8) birbirinden bağımsız ilerleyebilir. Otomasyon (V7) V6'nın ad kuyruğuna ve V2'nin medya katmanına dayanır.
 
@@ -224,6 +263,8 @@ Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yöne
 | IP adresi değişir | Bağlanamama | QR, APK'da sunucu adresi düğmesi, isteğe bağlı sabit IP/mDNS |
 | DM'in bilgisayarı kapalıyken pazar yok | Oturum dışı erişim yok | Beklenen davranış (yerel), gerekirse tünel |
 | Foundry paket yapısı beklenenden farklı | İçe aktarma çalışmaz | `local-folder` ve `manual` yedekleri, V0'da doğrulama |
+| Tünel adresi değişir, herkese açık bir adres | Oyuncu bağlanamaz, yetkisiz DM denemesi | Davet bağlantısı yenileme, PIN hız sınırı ve güçlü PIN, gerekirse adlandırılmış tünel |
+| DM'in bilgisayarı kapalı | Teklif bırakılamaz | Bilinen sınır. Çözüm: hep-açık mini PC ya da bulut |
 | Kaynaklar arası stil farkı | Tutarsız görünüm | Kadraj normalizasyonu, rarite çerçevesi, gölge, yerel üretimi ana yol yapmak |
 | Web görsellerinde düşük isabet (fantazi eşyalar) | Yanlış ya da kalitesiz görsel | Judge subagent'ı, DM onayı, üretime düşme |
 | Yerel üretim için GPU yok | Otomasyon yavaş ya da imkânsız | K9: Openverse + kendi görselleri + tür ikonları ile başla, üretimi sonra ekle |
@@ -239,4 +280,4 @@ Komut: `/item-images run` (Claude Code, DM'in makinesi). Ana ajan sırayı yöne
 3. **Satıcı üretimi:** Sadece DM üretsin mi, yoksa oyuncular da tezgâh açsın mı? (Tasarım ikisine de hazır, bu sürümde sadece DM.)
 4. **Crooked Moon nereden?** Foundry'de kurulu paketiniz var mı, yoksa PDF/D&D Beyond mi? (PDF ise 26 eşya için elle giriş en kısa yol.)
 5. **Portreler:** Elinizde hazır gerçekçi fantazi portreler var mı, yoksa kendiniz mi üreteceksiniz? Ağız kapalı, önden bakan çekimlere ihtiyaç var.
-6. **Oyuncular nerede?** Hepsi aynı odada/Wi-Fi'de mi, yoksa uzaktan bağlanan var mı? (Uzaktakiler için tünel aşaması öne alınır.)
+6. **Erişim:** Cloudflare Tunnel (oyuncuya kurulum yok, adres değişebilir) mi, Tailscale (herkes kurar, kalıcı adres) mi tercih edersiniz? DM'in bilgisayarı oyun dışında açık kalabilir mi?

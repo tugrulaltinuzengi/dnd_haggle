@@ -55,6 +55,31 @@ function renderDMLogin() {
     ${window.PazarApp ? '<button class="btn ghost" id="srv">⚙️ Sunucu adresi</button>' : ''}`;
 }
 
+
+// Eşya türü (v2'de kütüphane `type` alanı gelene kadar addan tahmin edilir).
+const TYPE_RULES = [
+  ['potion', '🧪', /iksir|şifa|panzehir|merhem/],
+  ['weapon', '🗡️', /kılıç|hançer|balta|mızrak|yay\b|ok\b|gürz|tokmak|çekiç|pala|kama|arbalet|asa\b|değnek/],
+  ['armor', '🛡️', /zırh|kalkan|miğfer|kask|kolluk|deri/],
+  ['scroll', '📜', /parşömen|kitap|tomar|harita|büyü/],
+  ['gem', '💎', /yüzük|kolye|pul|taş|mücevher|kristal|tılsım|muska/],
+  ['gear', '🎒', /\bip\b|çadır|meşale|çanta|sırt|battaniye|kazma|kürek|fener|yağ|erzak|yiyecek/],
+  ['gear', '🗝️', /alet|anahtar|kilit|maymuncuk/],
+];
+function itemType(i) {
+  const n = String(i.name).toLocaleLowerCase('tr');
+  for (const [cat, ico, re] of TYPE_RULES) if (re.test(n)) return { cat, ico };
+  return { cat: 'other', ico: i.magical ? '✨' : '📦' };
+}
+const FILTERS = [['all', '☰'], ['weapon', '🗡️'], ['armor', '🛡️'], ['potion', '🧪'], ['magic', '✨']];
+const BAG_SLOTS = 20;
+function portrait(m, opt = {}) {
+  const bg = m.portrait ? ` style="background-image:url('${esc(m.portrait)}')"` : '';
+  return `<div class="portrait ${opt.small ? 'sm' : ''}"${bg}>${m.portrait ? '' : `<div class="pface">${esc(m.emoji)}</div>`}
+    <div class="plaque"><span class="pico">${esc(m.emoji)}</span><span class="pname">${esc(m.name)}</span>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı 🚫</span>' : ''}</div>
+    ${opt.mood ? `<span class="pmood">${opt.mood}</span>` : ''}</div>`;
+}
+
 // ---------- oyuncu ----------
 const mer = (id) => S.merchants.find((m) => m.id === id);
 const chr = (id) => CH.find((c) => c.id === id);
@@ -68,26 +93,37 @@ function renderPlayer() {
   else if (view.tab === 'bids') body = renderBids(me);
   else if (view.mid) body = renderItems();
   else body = renderMarket();
-  const tabs = view.iid ? '' : `<nav class="tabs"><button data-tab="market" class="${view.tab === 'market' ? 'on' : ''}">🏪 Pazar</button><button data-tab="bids" class="${view.tab === 'bids' ? 'on' : ''}">📨 Teklif${S.bids.some((b) => b.status === 'counter') ? ' 🔴' : ''}</button><button data-tab="bag" class="${view.tab === 'bag' ? 'on' : ''}">🎒 Çanta${me.inventory.length ? ' ' + me.inventory.length : ''}</button><button data-act="logout">🚪</button></nav>`;
+  const tb = (k, ic, label, extra = '') => `<button data-tab="${k}" class="${view.tab === k ? 'on' : ''}"><span class="ic">${ic}</span>${label}${extra}</button>`;
+  const tabs = view.iid ? '' : `<nav class="tabs">${tb('market', '🏪', 'Pazar')}${tb('bids', '📨', 'Teklif', S.bids.some((b) => b.status === 'counter') ? ' 🔴' : '')}${tb('bag', '🎒', 'Çanta', me.inventory.length ? ' ' + me.inventory.length : '')}<button data-act="logout"><span class="ic">🚪</span>Çık</button></nav>`;
   $app.innerHTML = head + (S.dmOnline ? '' : '<p class="hint">DM şu an çevrimdışı. Pazar yine de açık.</p>') + body + tabs;
 }
 function renderMarket() {
-  return `<h2>Satıcılar</h2><div class="list">${S.merchants.map((m) => `
-    <button class="card row" data-mid="${m.id}"><span class="em">${m.emoji}</span>
-      <span class="grow"><b>${esc(m.name)}</b>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı 🚫</span>' : ''}<small>${m.items.length} eşya</small></span> ›</button>`).join('') || '<p class="empty">Pazar boş.</p>'}</div>`;
+  return `<h2>Pazar</h2><div class="list">${S.merchants.map((m) => `
+    <button class="card row" data-mid="${m.id}"><span class="pico" style="width:52px;height:52px;font-size:32px">${esc(m.emoji)}</span>
+      <span class="grow"><b style="margin:0">${esc(m.name)}</b>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı 🚫</span>' : ''}<small>${m.items.length} eşya</small></span> <span class="gold">›</span></button>`).join('') || '<p class="empty">Pazar boş.</p>'}</div>`;
 }
 function renderItems() {
   const m = mer(view.mid);
   if (!m) { view.mid = null; return renderMarket(); }
-  return `<button class="back" data-act="up">‹ Geri</button><div class="merch"><div class="em" style="font-size:56px">${m.emoji}</div><b>${esc(m.name)}</b>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı 🚫</span>' : ''}</div>
-    <div class="list">${m.items.map((i) => `
-      <button class="card row" data-iid="${i.id}" ${i.stock === 0 ? 'disabled' : ''}>
-        <span class="grow"><b>${esc(i.name)}</b>${i.magical ? '<span class="tag mg">✨ büyülü</span>' : ''}${i.stock === 0 ? '<span class="tag bad">tükendi</span>' : i.stock ? `<span class="tag">${i.stock} kaldı</span>` : ''}</span>
-        <span class="price">${fmt(i.price)} gp</span></button>`).join('') || '<p class="empty">Eşya yok.</p>'}</div>`;
+  const flt = view.flt || 'all';
+  const shown = m.items.filter((i) => flt === 'all' || (flt === 'magic' ? i.magical : itemType(i).cat === flt));
+  return `<button class="back" data-act="up">‹ Pazar</button>${portrait(m, { small: true })}
+    <div class="filters">${FILTERS.map(([k, ic]) => `<button data-flt="${k}" class="${flt === k ? 'on' : ''}">${ic}</button>`).join('')}</div>
+    <div class="shelf">${shown.map((i) => `
+      <button class="shelfitem" data-iid="${i.id}" ${i.stock === 0 ? 'disabled' : ''}>
+        <span class="slot ${i.magical ? 'mg' : ''}"><span class="ico">${itemType(i).ico}</span>${i.stock === 0 ? '<span class="sold">TÜKENDİ</span>' : i.stock ? `<span class="stock">×${i.stock}</span>` : ''}</span>
+        <span class="nm">${esc(i.name)}</span><span class="pr"><i class="coin"></i>${fmt(i.price)}</span></button>`).join('') || '<p class="empty" style="grid-column:1/-1">Bu rafta bir şey yok.</p>'}</div>
+    <p class="hint">Eşyaya dokun, pazarlığa başla.</p>`;
 }
 function renderBag(me) {
-  return `<h2>Çanta</h2><div class="list">${me.inventory.map((i) => `
-    <div class="card row"><span class="grow"><b>${esc(i.name)}</b>${i.damaged ? '<span class="tag bad">🩹 Kusurlu · satılamaz (0 gp)</span>' : ''}</span><span class="price">${fmt(i.paid)} gp</span></div>`).join('') || '<p class="empty">Çantan boş.</p>'}</div>`;
+  const n = Math.max(BAG_SLOTS, Math.ceil(me.inventory.length / 4) * 4);
+  const slots = Array.from({ length: n }, (_, k) => {
+    const i = me.inventory[k];
+    return i ? `<div class="bslot full ${i.damaged ? 'dmg' : ''}" title="${esc(i.name)}"><span class="ico">${itemType(i).ico}</span><span class="bp">${fmt(i.paid)}</span></div>` : '<div class="bslot"></div>';
+  }).join('');
+  return `<div class="bagbar"><span>Çanta</span><span>${me.inventory.length}/${n}</span></div><div class="bag">${slots}</div>
+    <div class="list bagdetail">${me.inventory.map((i) => `
+      <div class="card row"><span class="grow"><b style="margin:0">${esc(i.name)}</b>${i.damaged ? '<span class="tag bad">🩹 Kusurlu · satılamaz (0 gp)</span>' : ''}</span><span class="price">${fmt(i.paid)} gp</span></div>`).join('') || '<p class="empty">Çantan boş.</p>'}</div>`;
 }
 const BST = { new: ['⏳', 'DM bekleniyor'], counter: ['↩️', 'Cevap sende'], accepted: ['✅', 'Pazar gününde teslim'], rejected: ['🚫', 'Reddedildi'], withdrawn: ['↩', 'Geri çekildi'], settled: ['📦', 'Teslim edildi'], failed: ['⚠️', 'Teslim olmadı'] };
 const isOpen = (o) => ['new', 'counter', 'accepted'].includes(o.status);
@@ -131,9 +167,9 @@ function renderNegotiation(me) {
   const line = n && n.line ? n.line : m.banned ? 'Bugün seninle işim yok. Etiket fiyatı geçerli.' : 'Ne istiyorsun?';
   const broke = me.gold < price;
   return `<button class="back" data-act="up">‹ Geri</button>
-    <div class="merch"><div class="em">${m.emoji}</div><span class="mood">${n ? n.mood : '😊'}</span>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}
-      <div class="bubble">${esc(line)}</div></div>
-    <div class="card"><b>${esc(i.name)}</b>${i.magical ? '<span class="tag mg">✨ büyülü</span>' : ''}
+    ${portrait(m, { small: true, mood: n ? n.mood : '😊' })}
+    <div class="bubble">${esc(line)}</div>
+    <div class="card"><span class="ico" style="font-size:34px;filter:sepia(.6)">${itemType(i).ico}</span><b>${esc(i.name)}</b>${i.magical ? '<span class="tag mg">✨ büyülü</span>' : ''}
       <div class="bigprice">${price !== i.price ? `<s>${fmt(i.price)}</s>` : ''}${fmt(price)} gp</div></div>
     ${view.rolling ? '<div class="dice">🎲</div>' : last ? `<div class="result ${last.outcome}">${OUT[last.outcome][0]}${last.roll !== null ? `<small>🎲 ${last.rolls.length > 1 ? last.rolls.join(' / ') + ' → ' : ''}${last.roll} + ${last.bonus} = ${last.total}</small>` : ''}<small>${OUT[last.outcome][1]}</small></div>` : ''}
     ${canHaggle && !view.rolling ? `
@@ -157,7 +193,7 @@ const ST_TR = { open: 'sürüyor', deal: 'anlaşıldı', angered: 'kapandı' };
 const TYPE_LABEL = { comert: 'Cömert', notr: 'Nötr', acgozlu: 'Açgözlü' };
 
 function renderDM() {
-  const tabs = `<nav class="tabs">${[['live', '⚔️ Canlı'], ['bids', `📨 Teklif${S.bids.filter((b) => b.status === 'new').length ? ' 🔴' : ''}`], ['market', '🏪 Pazar'], ['players', '👥 Kişi']].map(([k, l]) => `<button data-dtab="${k}" class="${dmTab === k ? 'on' : ''}">${l}</button>`).join('')}<button data-act="logout">🚪</button></nav>`;
+  const tabs = `<nav class="tabs">${[['live', '⚔️', 'Canlı'], ['bids', '📨', `Teklif${S.bids.filter((b) => b.status === 'new').length ? ' 🔴' : ''}`], ['market', '🏪', 'Pazar'], ['players', '👥', 'Kişi']].map(([k, ic, l]) => `<button data-dtab="${k}" class="${dmTab === k ? 'on' : ''}"><span class="ic">${ic}</span>${l}</button>`).join('')}<button data-act="logout"><span class="ic">🚪</span>Çık</button></nav>`;
   const head = `<div class="top"><span class="pill">🎲 DM</span><span class="pill">🎪 ${S.week} · ☀️ ${S.day}</span><button class="btn sm ghost" data-act="newday">Yeni Gün 🌅</button></div>`;
   let body = '';
   if (dmTab === 'live') {
@@ -229,7 +265,8 @@ $app.addEventListener('click', async (e) => {
   }
   if (t.id === 'dmgo') { try { const r = await api('dm/login', { pin: document.getElementById('pin').value }); auth = r; store.set(r); pick = null; connect(); } catch {} return; }
   if (d.tab) { view.tab = d.tab; view.mid = null; view.iid = null; return render(); }
-  if (d.mid) { view.mid = d.mid; return render(); }
+  if (d.mid) { view.mid = d.mid; view.flt = 'all'; return render(); }
+  if (d.flt) { view.flt = d.flt; return render(); }
   if (d.iid) { view.iid = d.iid; view.y = null; return render(); }
   if (d.step) { const r = document.getElementById('yr'); const st = Math.max(0.01, Math.round(+r.max / 50 * 100) / 100); view.y = Math.min(+r.max, Math.max(+r.min, Math.round((view.y + (+d.step) * st) * 100) / 100)); return render(); }
   if (d.ap) { view.approach = d.ap; return render(); }
