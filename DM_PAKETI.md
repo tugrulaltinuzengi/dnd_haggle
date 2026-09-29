@@ -1,6 +1,6 @@
 # D&D 5e Dinamik Pazarlık Sistemi — DM Paketi
 
-Bu doküman pazarlık sisteminin kurallarını ve DM'in doldurması gereken kararları içerir. `____` ile işaretli alanları doldurduktan sonra sistem masada kullanıma hazırdır.
+Bu doküman pazarlık sisteminin kurallarını ve DM'in doldurması gereken kararları içerir. Tüm karar alanları doldurulmuştur (Aşama 2). ✅ işareti DM'in onayladığı, *(varsayılan)* işareti planın önerisiyle bırakılan ve DM'in dilediği zaman değiştirebileceği kararlardır.
 
 İlgili dosyalar:
 - [REFERANS_KARTI.md](REFERANS_KARTI.md) — masada kullanılacak tek sayfalık DM kartı
@@ -17,15 +17,15 @@ Bu doküman pazarlık sisteminin kurallarını ve DM'in doldurması gereken kara
 | **G = X − Y** | Pazarlık payı | Hesaplanır |
 | **a = G / 2** | Yarı yol payı (doğal orta nokta) | Hesaplanır |
 | **u** | Satıcının tutumu / zorluk faktörü | DM (gizli) |
-| **Rep** | Satıcının sabrı | DM (varsayılan 3) |
+| **Rep** | Satıcının sabrı | DM (u'ya göre 4 / 3 / 2) |
 
 ### u ön ayarları
 
 | u | Satıcı tipi |
 |---|---|
-| 0.5 | Cömert / Çaresiz |
-| 1.0 | Nötr / Standart tüccar |
-| 1.5 | Açgözlü / İnatçı |
+| 0.5 | Cömert / Çaresiz (Rep 4, DC 12) |
+| 1.0 | Nötr / Standart tüccar (Rep 3, DC 15) |
+| 1.5 | Açgözlü / İnatçı (Rep 2, DC 18) |
 
 DM ara değerler de kullanabilir (ör. 0.8, 1.2).
 
@@ -35,7 +35,7 @@ DM ara değerler de kullanabilir (ör. 0.8, 1.2).
 
 1. DM satıcının **X**, **u** ve **Rep** değerlerini belirler.
 2. Oyuncu teklifini (**Y**) söyler.
-3. Oyuncu **d20 + Persuasion** atar. DC = `____` (bkz. Soru 7).
+3. Oyuncu **d20 + Persuasion** atar. DC = **12 / 15 / 18** (u = 0.5 / 1.0 / 1.5).
 4. Sonuca göre fiyat (**f**) hesaplanır.
 5. Başarısızlıkta Rep 1 düşer. Rep 0 olursa ceza uygulanır.
 
@@ -47,18 +47,17 @@ DM ara değerler de kullanabilir (ör. 0.8, 1.2).
 |---|---|---|
 | **Kritik başarı** | d20 = 20 veya DC + 5 ve üzeri | f = Y |
 | **Başarı** | DC tutturuldu | f = Y + a · (u / 2) |
-| **Başarısızlık** | DC altı, Rep −1 | f = X − a · (u / 2) *(önerilen düzeltme)* |
+| **Başarısızlık** | DC altı, Rep −1 | f = X − a · (u / 2) |
 
-### ⚠️ Orijinal formüldeki hata
+### Başarısızlık formülü (DM kararı ✅)
 
-Orijinal başarısızlık formülü **f = X − a · (1/u)** idi. u = 0.5 için bu formül X − 2a = **Y** sonucunu verir. Yani cömert satıcıda zarı tutturamayan oyuncu tam istediği fiyatı alır ve başarısızlık başarıdan daha iyi bir sonuç olur.
+Orijinal formül **f = X − a · (1/u)** idi. u = 0.5 için X − 2a = **Y** sonucunu veriyordu, yani zarı tutturamayan cömert satıcı müşteriyi istediği fiyata bırakıyordu. Bu yüzden düzeltildi:
 
-**DM kararı:**
-- [ ] Önerilen düzeltme: f = X − a · (u / 2)
+- [x] **f = X − a · (u / 2)** *(seçildi)*
 - [ ] Başarısızlıkta fiyat X'te kalsın (indirim yok)
-- [ ] Başka: `____`
+- [ ] f = X − a / (2u) (80 / 90 / 93.3 gp)
 
-> Oyun testi notu: Önerilen düzeltmede başarısızlık fiyatı satıcı açgözlüleştikçe **düşüyor** (95 → 90 → 85 gp). Testte bu durum ölçülebilir bir terslik yarattı. Bölüm 6'daki nottaki yöne uyan bir alternatif, **f = X − a / (2u)** formülüdür: 80 → 90 → 93.3 gp. Ayrıntılar [OYUN_TESTI.md](OYUN_TESTI.md) dosyasında.
+**Bilinen davranış:** Seçilen formülde başarısızlık fiyatı u arttıkça *düşer* (95 → 90 → 85 gp). +0 bonuslu tek atışta açgözlü satıcı ortalama 82.8 gp'ye, nötr satıcı 83.5 gp'ye satar ([OYUN_TESTI.md](OYUN_TESTI.md)). DM bunu bilerek kabul etti. Açgözlü satıcının asıl zorluğu DC 18 ve Rep 2'dir. Masa testinde (Aşama 3) gözlenecek, gerekirse Aşama 4'te yeniden bakılır.
 
 ---
 
@@ -66,7 +65,7 @@ Orijinal başarısızlık formülü **f = X − a · (1/u)** idi. u = 0.5 için 
 
 - Pazarlık derhal biter.
 - Satıcı zam yapar: **f = 1.1 × X**
-- Yasağın kapsamı ve süresi Soru 12'de belirlenir.
+- **Yasak:** Satıcı o oyun günü bu oyuncu grubuyla **hiçbir alışverişte** pazarlık yapmaz (fiyatlar etikette kalır). Ertesi gün sıfırlanır. Zam olan 1.1 × X fiyatı sadece o anlaşma için geçerlidir. *(Soru 12 ✅)*
 
 ---
 
@@ -76,7 +75,7 @@ Orijinal başarısızlık formülü **f = X − a · (1/u)** idi. u = 0.5 için 
 - **Bedel:** Eşya *Kusurlu / Damgalı* statüsü kazanır.
   - Hiçbir tüccara satılamaz (0 gp).
   - Sadece kullanılabilir, parçalanabilir (salvage) veya yok edilebilir.
-- **Ne zaman kullanılabilir:** Pazarlıktan önce veya Rep = 0 olduğunda (bkz. Soru 13).
+- **Ne zaman kullanılabilir:** **Her an** (pazarlıktan önce, pazarlığın ortasında ya da Rep = 0 iken). Fiyat her zaman 0.5 × X etiket fiyatıdır, pazarlıkta ulaşılan fiyat hesaba katılmaz. Satıcının gerekçesi: stoktaki kusurlu ya da damgalı parça. *(Soru 13 ✅)*
 
 ---
 
@@ -92,9 +91,7 @@ X = 100 gp, Y = 60 gp, G = 40, a = 20
 
 Kritik başarı: 60 gp · Rep = 0 cezası: 110 gp · Hard Gamble: 50 gp (kusurlu)
 
-> Not: Açgözlü satıcıda (u = 1.5) başarısızlık fiyatı cömert satıcıdakinden **düşük** çıkıyor. Bu istenen bir davranış değilse başarısızlık formülü u yerine 1/u ile ölçeklenmeli ve u = 0.5'te f ≥ X/2 + Y/2 olacak şekilde sınırlanmalı. Oyun testinde kontrol edilecek.
->
-> **Kontrol edildi:** Terslik testte doğrulandı (bkz. [OYUN_TESTI.md](OYUN_TESTI.md)). f = X − a / (2u) formülü iki şartı da sağlıyor: 1/u ile ölçekleniyor ve u = 0.5'te tam olarak X/2 + Y/2 = 80 gp veriyor.
+> Not: Açgözlü satıcıda (u = 1.5) başarısızlık fiyatı cömert satıcıdakinden düşüktür. Bu bilinen ve kabul edilmiş bir davranıştır (bkz. bölüm 3).
 
 ---
 
@@ -102,52 +99,54 @@ Kritik başarı: 60 gp · Rep = 0 cezası: 110 gp · Hard Gamble: 50 gp (kusurlu
 
 ### Fiyatlandırma (X)
 1. X her zaman kitap fiyatı mı olacak, yoksa satıcı bazında mı belirlenecek?
-   `____`
+   X kitap fiyatıdır. DM bölge ve nadirlikle ±%20 oynatabilir. *(varsayılan)*
 2. Fiyatlar tam gp'ye mi yuvarlansın, sp/cp kullanılsın mı?
-   `____`
+   Sp ve cp kullanılır, en yakın cp'ye yuvarlanır. *(varsayılan)*
 
 ### Teklif (Y)
 3. %25 alt sınır sabit mi, yoksa satıcıya göre mi değişir?
-   `____`
+   %25 alt sınır sabittir. *(varsayılan)*
 4. Absürt düşük bir teklif (ör. alt sınırın hemen üstü) otomatik olarak Rep düşürsün mü?
-   `____`
+   **Y < X/4:** zarsız ret, **Rep −1**. Alt sınırın (X/4) hemen üstündeki teklifler normal zarla çözülür. ✅
 
 ### Satıcı tutumu (u)
 5. u önceden mi belirlenecek, yoksa satıcıyla tanışınca zarla mı? (Öneri: d6 → 1–2: 0.5, 3–4: 1.0, 5–6: 1.5)
-   `____`
+   Satıcıyla tanışınca d6 ile belirlenir (1–2: 0.5, 3–4: 1.0, 5–6: 1.5). Önemli tüccarları DM seçer. *(varsayılan)*
 6. Oyuncular Insight ile u'yu sezebilsin mi? DC kaç?
-   `____`
+   Insight DC 15 ile satıcının tipini (cömert / nötr / açgözlü) sezer, sayıyı değil. *(varsayılan)*
 
 ### Zar ve DC
 7. DC formülü ne olacak? (Öneri: DC = 10 + 5 × u → 12 / 15 / 18)
-   `____`
+   **Sabit: 12 / 15 / 18.** ✅
 8. Deception veya Intimidation da kullanılabilir mi? Farklı sonuçları olsun mu? (ör. Intimidation başarısızlığında Rep −2)
-   `____`
+   Deception aynı tabloyu kullanır, yakalanırsa Rep −2. Intimidation başarısızlığında Rep −2. *(varsayılan)*
 9. Advantage hangi durumlarda verilir? (ortak dil, önceki iyilik, rüşvet vb.)
-   `____`
+   Ortak dil, önceki iyilik ve ölçülü rüşvet: her biri advantage verir, en fazla bir advantage sayılır. *(varsayılan)*
 
 ### Tur yapısı ve Rep
 10. Başarısızlıktan sonra oyuncu yeni teklifle tekrar deneyebilir mi? Yeni teklif öncekinden düşük olabilir mi?
-    `____`
+    **Evet.** Aynı ya da daha yüksek Y serbesttir. Önceki teklifin altında bir Y verilirse **Rep −1** (zar yine atılır). ✅
 11. Rep başlangıç değeri herkes için 3 mü, yoksa u'ya göre mi? (Öneri: 0.5 → 4, 1.0 → 3, 1.5 → 2)
-    `____`
+    **4 / 3 / 2** (u = 0.5 / 1.0 / 1.5). ✅
 12. Rep = 0 yasağı sadece o eşya için mi, tüm alışverişler için mi? Süresi ne kadar?
-    `____`
+    **Tüm alışverişler, bir oyun günü.** Ertesi gün sıfırlanır. ✅
 
 ### Hard Gamble
 13. Pazarlık hiç yapılmadan Hard Gamble istenebilir mi? Satıcının kabul etme gerekçesi ne?
-    `____`
+    **Her an** istenebilir. Satıcının gerekçesi: stoktaki kusurlu ya da damgalı parça. ✅
 14. Kusurlu eşyanın mekanik dezavantajı olsun mu? (ör. silahta doğal 1'de kırılma, zırhta −1 AC)
-    `____`
+    Kusurlu silah doğal 1'de kırılır. Kusurlu zırh −1 AC. Aletlerde ve araçlarda dezavantaj yok. *(varsayılan)*
 15. Büyülü eşyalarda Hard Gamble yasak mı?
-    `____`
+    Büyülü eşyada Hard Gamble yasak, sıradan eşyada serbest. *(varsayılan)*
 
 ---
 
 ## 8. Proje planı
 
-- [ ] **Tasarım kilidi:** DM soruları yanıtlar.
-- [ ] **Formül düzeltmesi:** Başarısızlık formülü seçilir, örnek tablo güncellenir. *(Seçenekler ve test verisi hazır. Seçim DM'de.)*
-- [x] **Referans kartı:** Masada kullanılacak tek sayfalık DM kartı hazırlanır. → [REFERANS_KARTI.md](REFERANS_KARTI.md)
-- [ ] **Oyun testi:** Üç satıcı tipiyle (0.5 / 1.0 / 1.5) deneme pazarlıkları yapılır. *(Olasılık bazlı test tamamlandı → [OYUN_TESTI.md](OYUN_TESTI.md). Masada oyuncularla test bekliyor.)*
+Ayrıntılı aşamalar [PLAN.md](PLAN.md) dosyasındadır.
+
+- [x] **Tasarım kilidi:** DM soruları yanıtlandı (bölüm 7).
+- [x] **Formül düzeltmesi:** f = X − a · (u / 2) seçildi, örnek tablo güncel.
+- [x] **Referans kartı:** [REFERANS_KARTI.md](REFERANS_KARTI.md)
+- [ ] **Oyun testi:** Olasılık testi tamam ([OYUN_TESTI.md](OYUN_TESTI.md)). Masa testi bekliyor ([TEST_KAYDI.md](TEST_KAYDI.md)).
 - [ ] **Revizyon:** DC ve Rep değerleri test sonuçlarına göre ayarlanır.
