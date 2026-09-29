@@ -1,0 +1,8 @@
+[
+  {"id":"ozan","emoji":"🎻","name":"Ozan","blurb":"Tatlı dilli. İkna ustası.","gold":80,"bonus":{"persuasion":6,"deception":3,"intimidation":0,"insight":2}},
+  {"id":"hirsiz","emoji":"🗡️","name":"Hırsız","blurb":"Yalan söyler, yakalanmaz.","gold":60,"bonus":{"persuasion":2,"deception":6,"intimidation":2,"insight":3}},
+  {"id":"barbar","emoji":"🪓","name":"Barbar","blurb":"Bağırır, tüccar korkar.","gold":100,"bonus":{"persuasion":0,"deception":0,"intimidation":6,"insight":0}},
+  {"id":"paladin","emoji":"🛡️","name":"Paladin","blurb":"Dürüst yüz, ağır yumruk.","gold":90,"bonus":{"persuasion":5,"deception":0,"intimidation":3,"insight":2}},
+  {"id":"buyucu","emoji":"🔮","name":"Büyücü","blurb":"Kesesi dolu, dili kısa.","gold":200,"bonus":{"persuasion":1,"deception":1,"intimidation":1,"insight":4}},
+  {"id":"druid","emoji":"🌿","name":"Druid","blurb":"Sakin. Herkes yumuşar.","gold":70,"bonus":{"persuasion":4,"deception":1,"intimidation":1,"insight":5}}
+]

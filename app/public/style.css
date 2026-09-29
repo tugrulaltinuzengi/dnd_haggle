@@ -1,0 +1,81 @@
+:root{--bg:#1b1410;--card:#2b2018;--card2:#3a2b1f;--ink:#f6ead2;--mut:#b9a684;--gold:#e0a526;--ok:#5cc46a;--bad:#e2554a;--line:#4b3826;--r:16px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{min-height:100vh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+#app{max-width:520px;margin:0 auto;padding:12px 14px 90px}
+h1{font-size:26px;margin:14px 0 4px;text-align:center}
+h2{font-size:18px;margin:16px 0 8px}
+.sub{color:var(--mut);text-align:center;margin:0 0 14px}
+.top{display:flex;align-items:center;gap:8px;justify-content:space-between;margin-bottom:8px}
+.pill{background:var(--card);border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-weight:700;white-space:nowrap}
+.gold{color:var(--gold)}
+.back{background:none;border:0;color:var(--mut);font-size:16px;padding:8px 4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:var(--card);border:2px solid var(--line);border-radius:var(--r);padding:12px;text-align:center;color:var(--ink);font:inherit}
+button.card{cursor:pointer;width:100%}
+button.card:active{transform:scale(.97)}
+.card.sel{border-color:var(--gold);box-shadow:0 0 0 3px #e0a52644;background:var(--card2)}
+.card .em{font-size:44px;line-height:1.1}
+.card b{display:block;margin-top:4px}
+.card small{display:block;color:var(--mut);margin-top:2px}
+.stats{display:flex;justify-content:center;gap:6px;margin-top:8px;font-size:13px}
+.stats span{background:#0004;border-radius:8px;padding:2px 6px}
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;align-items:center;gap:12px;text-align:left}
+.row .em{font-size:38px}
+.row .grow{flex:1;min-width:0}
+.price{font-weight:800;color:var(--gold);white-space:nowrap}
+.tag{display:inline-block;font-size:12px;border-radius:8px;padding:1px 7px;background:#0005;color:var(--mut);margin-left:6px}
+.tag.mg{color:#b48cff}
+.tag.bad{color:var(--bad)}
+input,button,select{font:inherit}
+input[type=text],input[type=password],input[type=number]{width:100%;padding:12px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);font-size:18px}
+.btn{display:block;width:100%;padding:14px;border-radius:14px;border:0;background:var(--gold);color:#2a1a04;font-weight:800;font-size:18px;cursor:pointer;margin-top:10px}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.4}
+.btn.ok{background:var(--ok);color:#0d2a12}
+.btn.ghost{background:var(--card);color:var(--ink);border:2px solid var(--line);font-size:15px;font-weight:600;padding:10px}
+.btn.sm{display:inline-block;width:auto;padding:8px 12px;font-size:14px;margin:4px 4px 0 0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.merch{text-align:center;margin:6px 0 10px}
+.merch .em{font-size:76px;line-height:1}
+.mood{font-size:30px}
+.bubble{position:relative;background:var(--ink);color:#2a1a04;border-radius:14px;padding:10px 14px;margin:10px auto;max-width:340px;font-weight:600}
+.bubble:before{content:"";position:absolute;top:-8px;left:50%;margin-left:-8px;border:8px solid transparent;border-top:0;border-bottom-color:var(--ink)}
+.bigprice{font-size:38px;font-weight:900;color:var(--gold);text-align:center}
+.bigprice s{font-size:20px;color:var(--mut);margin-right:8px}
+.offer{background:var(--card);border-radius:var(--r);padding:12px;margin-top:8px;border:2px solid var(--line)}
+.offer .num{font-size:34px;font-weight:900;text-align:center}
+.offer .num small{display:block;font-size:13px;color:var(--mut);font-weight:500}
+.stepper{display:flex;gap:8px;align-items:center}
+.stepper button{width:48px;height:48px;border-radius:12px;border:2px solid var(--line);background:var(--card2);color:var(--ink);font-size:24px}
+input[type=range]{flex:1;accent-color:var(--gold);height:40px}
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.chip{border:2px solid var(--line);background:var(--card2);color:var(--ink);border-radius:12px;padding:8px 4px;text-align:center;font-size:14px}
+.chip.on{border-color:var(--gold);background:#e0a52622}
+.chip .em{font-size:24px;display:block}
+.chip small{color:var(--mut);display:block;font-size:11px}
+.result{border-radius:var(--r);padding:12px;margin-top:10px;text-align:center;font-weight:800;font-size:20px;border:2px solid var(--line);background:var(--card)}
+.result.crit{border-color:var(--gold);color:var(--gold)}
+.result.success{border-color:var(--ok);color:var(--ok)}
+.result.fail,.result.ret,.result.angered{border-color:var(--bad);color:var(--bad)}
+.result small{display:block;color:var(--mut);font-weight:500;font-size:14px}
+.dice{font-size:56px;text-align:center;animation:roll .5s linear infinite}
+@keyframes roll{to{transform:rotate(360deg)}}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:#120d0a;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+.tabs button{flex:1;background:none;border:0;color:var(--mut);padding:12px 4px;font-size:15px}
+.tabs button.on{color:var(--gold);font-weight:800}
+#toast{position:fixed;left:50%;bottom:80px;transform:translate(-50%,20px);background:var(--bad);color:#fff;padding:10px 16px;border-radius:12px;opacity:0;pointer-events:none;transition:.25s;max-width:90%;text-align:center;font-weight:600}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+.hearts{letter-spacing:2px}
+.feed{font-size:13px;color:var(--mut);border-top:1px solid var(--line);padding:6px 0}
+.hint{color:var(--mut);font-size:13px;text-align:center;margin:10px 0}
+.actions{margin-top:12px}
+.empty{color:var(--mut);text-align:center;padding:24px 0}
+.dm-neg{text-align:left}
+.dm-neg .hd{display:flex;justify-content:space-between;gap:8px;font-weight:700}
+.tl{display:flex;gap:6px;align-items:center;margin:6px 0}
+.tl button{flex:1}
+.seg{display:flex;gap:6px;margin:6px 0}
+.seg button{flex:1;padding:8px 2px;border-radius:10px;border:2px solid var(--line);background:var(--card2);color:var(--ink)}
+.seg button.on{border-color:var(--gold);background:#e0a52622}

@@ -1,0 +1,222 @@
+'use strict';
+const $app = document.getElementById('app');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (n) => (+n).toFixed(2).replace(/\.?0+$/, '');
+const store = { get() { try { return JSON.parse(localStorage.getItem('auth')); } catch { return null; } }, set(v) { try { v ? localStorage.setItem('auth', JSON.stringify(v)) : localStorage.removeItem('auth'); } catch {} } };
+
+const APPROACH = { persuasion: { em: '🗣️', name: 'İkna', risk: 'Hata −1' }, deception: { em: '🎭', name: 'Blöf', risk: 'Hata −2' }, intimidation: { em: '💢', name: 'Gözdağı', risk: 'Hata −2' } };
+const OUT = { crit: ['🎯 Kritik!', 'Teklifin aynen kabul.'], success: ['✅ Başarı', 'Ortada buluştunuz.'], fail: ['❌ Olmadı', 'Satıcı geri adım atmadı.'], ret: ['🚫 Hakaret!', 'Zar yok. Sabır azaldı.'], angered: ['😡 Sinirlendi!', 'Fiyat %10 arttı. Bugün pazarlık yok.'] };
+
+let CH = [], S = null, auth = store.get(), es = null;
+let view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion', rolling: false };
+let pick = null, dmTab = 'live', toastT;
+
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2500); }
+async function api(path, body) {
+  const r = await fetch('/api/' + path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-token': (auth && auth.token) || '' }, body: JSON.stringify(body || {}) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { toast(j.error || 'Hata'); throw new Error(j.error); }
+  return j;
+}
+const act = (path, body) => api(path, body).catch(() => {});
+
+function connect() {
+  if (es) es.close();
+  es = new EventSource('/api/events?token=' + encodeURIComponent(auth.token));
+  es.onmessage = (e) => { S = JSON.parse(e.data); render(); };
+  es.onerror = async () => {
+    if (es.readyState !== 2) return;            // tarayıcı kendi yeniden bağlanır
+    const r = await fetch('/api/chars').catch(() => null);
+    if (r) { auth = null; store.set(null); S = null; render(); } // sunucu ayakta ama token geçersiz
+  };
+}
+function logout() { if (es) es.close(); auth = null; S = null; store.set(null); view = { tab: 'market', mid: null, iid: null, y: null, approach: 'persuasion' }; render(); }
+
+// ---------- giriş ----------
+function renderJoin() {
+  $app.innerHTML = `
+    <h1>🪙 Pazar</h1><p class="sub">Karakterini seç, pazara gir.</p>
+    <div class="grid">${CH.map((c) => `
+      <button class="card ${pick === c.id ? 'sel' : ''}" data-pick="${c.id}">
+        <div class="em">${c.emoji}</div><b>${esc(c.name)}</b><small>${esc(c.blurb)}</small>
+        <div class="stats"><span>🗣️${c.bonus.persuasion >= 0 ? '+' : ''}${c.bonus.persuasion}</span><span>🎭+${c.bonus.deception}</span><span>💢+${c.bonus.intimidation}</span></div>
+        <div class="stats"><span class="gold">🪙 ${c.gold}</span></div>
+      </button>`).join('')}</div>
+    <h2>Adın</h2><input type="text" id="name" maxlength="16" placeholder="Adın" autocomplete="off">
+    <button class="btn" id="go">Pazara Gir</button>
+    <button class="btn ghost" id="dm">Ben DM'im</button>`;
+}
+function renderDMLogin() {
+  $app.innerHTML = `<h1>🎲 DM</h1><p class="sub">PIN'i gir.</p>
+    <input type="password" id="pin" inputmode="numeric" placeholder="PIN"><button class="btn" id="dmgo">Gir</button>
+    <button class="btn ghost" id="back">Geri</button>`;
+}
+
+// ---------- oyuncu ----------
+const mer = (id) => S.merchants.find((m) => m.id === id);
+const chr = (id) => CH.find((c) => c.id === id);
+
+function renderPlayer() {
+  const me = S.me, c = chr(me.charId) || { emoji: '🧑', name: '' };
+  const head = `<div class="top"><span class="pill">${c.emoji} ${esc(me.name)}</span><span class="pill gold">🪙 ${fmt(me.gold)}</span><span class="pill" title="Gün">☀️ ${S.day}${me.advantage ? ' ⭐' : ''}</span></div>`;
+  let body;
+  if (view.iid) body = renderNegotiation(me);
+  else if (view.tab === 'bag') body = renderBag(me);
+  else if (view.mid) body = renderItems();
+  else body = renderMarket();
+  const tabs = view.iid ? '' : `<nav class="tabs"><button data-tab="market" class="${view.tab === 'market' ? 'on' : ''}">🏪 Pazar</button><button data-tab="bag" class="${view.tab === 'bag' ? 'on' : ''}">🎒 Çanta (${me.inventory.length})</button><button data-act="logout">🚪</button></nav>`;
+  $app.innerHTML = head + (S.dmOnline ? '' : '<p class="hint">DM şu an çevrimdışı. Pazar yine de açık.</p>') + body + tabs;
+}
+function renderMarket() {
+  return `<h2>Satıcılar</h2><div class="list">${S.merchants.map((m) => `
+    <button class="card row" data-mid="${m.id}"><span class="em">${m.emoji}</span>
+      <span class="grow"><b>${esc(m.name)}</b>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı 🚫</span>' : ''}<small>${m.items.length} eşya</small></span> ›</button>`).join('') || '<p class="empty">Pazar boş.</p>'}</div>`;
+}
+function renderItems() {
+  const m = mer(view.mid);
+  if (!m) { view.mid = null; return renderMarket(); }
+  return `<button class="back" data-act="up">‹ Geri</button><div class="merch"><div class="em" style="font-size:56px">${m.emoji}</div><b>${esc(m.name)}</b>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}${m.banned ? '<span class="tag bad">Bugün kapalı 🚫</span>' : ''}</div>
+    <div class="list">${m.items.map((i) => `
+      <button class="card row" data-iid="${i.id}" ${i.stock === 0 ? 'disabled' : ''}>
+        <span class="grow"><b>${esc(i.name)}</b>${i.magical ? '<span class="tag mg">✨ büyülü</span>' : ''}${i.stock === 0 ? '<span class="tag bad">tükendi</span>' : i.stock ? `<span class="tag">${i.stock} kaldı</span>` : ''}</span>
+        <span class="price">${fmt(i.price)} gp</span></button>`).join('') || '<p class="empty">Eşya yok.</p>'}</div>`;
+}
+function renderBag(me) {
+  return `<h2>Çanta</h2><div class="list">${me.inventory.map((i) => `
+    <div class="card row"><span class="grow"><b>${esc(i.name)}</b>${i.damaged ? '<span class="tag bad">🩹 Kusurlu · satılamaz (0 gp)</span>' : ''}</span><span class="price">${fmt(i.paid)} gp</span></div>`).join('') || '<p class="empty">Çantan boş.</p>'}</div>`;
+}
+function currentItem() {
+  for (const m of S.merchants) { const i = m.items.find((x) => x.id === view.iid); if (i) return { m, i }; }
+  return null;
+}
+function renderNegotiation(me) {
+  const f = currentItem();
+  if (!f) { view.iid = null; return renderMarket(); }
+  const { m, i } = f, n = S.negs[i.id] || null, ch = chr(me.charId);
+  const status = n ? n.status : 'open', price = n ? n.price : i.price;
+  const canHaggle = status === 'open' && !m.banned && i.stock !== 0;
+  const min = Math.ceil(i.price * 25) / 100, max = Math.max(min, Math.floor(i.price * 99) / 100 - 0.01);
+  if (view.y == null || view.iid !== view.yFor) { view.y = Math.min(max, Math.max(min, n && n.lastY ? n.lastY : Math.round(i.price * 70) / 100)); view.yFor = view.iid; }
+  const last = n && n.history[n.history.length - 1];
+  const line = n && n.line ? n.line : m.banned ? 'Bugün seninle işim yok. Etiket fiyatı geçerli.' : 'Ne istiyorsun?';
+  const broke = me.gold < price;
+  return `<button class="back" data-act="up">‹ Geri</button>
+    <div class="merch"><div class="em">${m.emoji}</div><span class="mood">${n ? n.mood : '😊'}</span>${m.revealed ? `<span class="tag">${esc(m.revealed)}</span>` : ''}
+      <div class="bubble">${esc(line)}</div></div>
+    <div class="card"><b>${esc(i.name)}</b>${i.magical ? '<span class="tag mg">✨ büyülü</span>' : ''}
+      <div class="bigprice">${price !== i.price ? `<s>${fmt(i.price)}</s>` : ''}${fmt(price)} gp</div></div>
+    ${view.rolling ? '<div class="dice">🎲</div>' : last ? `<div class="result ${last.outcome}">${OUT[last.outcome][0]}${last.roll !== null ? `<small>🎲 ${last.rolls.length > 1 ? last.rolls.join(' / ') + ' → ' : ''}${last.roll} + ${last.bonus} = ${last.total}</small>` : ''}<small>${OUT[last.outcome][1]}</small></div>` : ''}
+    ${canHaggle && !view.rolling ? `
+      <div class="offer"><div class="num"><span id="ynum">${fmt(view.y)}</span> gp<small>Teklifin</small></div>
+        <div class="stepper"><button data-step="-1">−</button><input type="range" id="yr" min="${min}" max="${max}" step="0.01" value="${view.y}"><button data-step="1">+</button></div>
+        <div class="chips">${Object.entries(APPROACH).map(([k, a]) => `<button class="chip ${view.approach === k ? 'on' : ''}" data-ap="${k}"><span class="em">${a.em}</span>${a.name} ${ch.bonus[k] >= 0 ? '+' : ''}${ch.bonus[k]}<small>${a.risk}</small></button>`).join('')}</div>
+        <button class="btn" data-act="offer">Pazarlık Et 🎲${me.advantage ? ' ⭐' : ''}</button></div>` : ''}
+    <div class="actions">
+      <button class="btn ok" data-act="accept" ${broke ? 'disabled' : ''}>${broke ? 'Altının yetmiyor' : `Satın Al · ${fmt(price)} gp`}</button>
+      <div class="two">
+        ${m.revealed ? '<span></span>' : `<button class="btn ghost" data-act="insight" ${m.insightTried ? 'disabled' : ''}>🔍 ${m.insightTried ? 'Bugün denedin' : 'Sez'}</button>`}
+        ${i.magical ? '<span></span>' : `<button class="btn ghost" data-act="gamble">🃏 Hard Gamble</button>`}
+      </div>
+    </div>`;
+}
+
+// ---------- DM ----------
+const pname = (id) => { const p = S.players.find((x) => x.id === id); return p ? `${(chr(p.charId) || {}).emoji || ''} ${esc(p.name)}` : '?'; };
+const OUT_TR = { crit: 'Kritik', success: 'Başarı', fail: 'Başarısız', ret: 'Ret', angered: 'Sinirlendi' };
+const ST_TR = { open: 'sürüyor', deal: 'anlaşıldı', angered: 'kapandı' };
+const TYPE_LABEL = { comert: 'Cömert', notr: 'Nötr', acgozlu: 'Açgözlü' };
+
+function renderDM() {
+  const tabs = `<nav class="tabs">${[['live', '⚔️ Canlı'], ['market', '🏪 Pazar'], ['players', '👥 Oyuncular']].map(([k, l]) => `<button data-dtab="${k}" class="${dmTab === k ? 'on' : ''}">${l}</button>`).join('')}<button data-act="logout">🚪</button></nav>`;
+  const head = `<div class="top"><span class="pill">🎲 DM</span><span class="pill">☀️ Gün ${S.day}</span><button class="btn sm ghost" data-act="newday">Yeni Gün 🌅</button></div>`;
+  let body = '';
+  if (dmTab === 'live') {
+    const negs = S.negs.filter((n) => n.last).reverse();
+    body = `<h2>Pazarlıklar</h2><div class="list">${negs.map((n) => `
+      <div class="card dm-neg"><div class="hd"><span>${pname(n.playerId)} → ${esc(n.item)}</span><span class="hearts">${'❤️'.repeat(n.rep)}${'🖤'.repeat(n.maxRep - n.rep)}</span></div>
+        <small>${OUT_TR[n.last.outcome]} · teklif ${fmt(n.last.y)}${n.last.roll !== null ? ` · 🎲 ${n.last.roll}+${n.last.bonus}` : ''} · fiyat <b class="gold">${fmt(n.price)}</b> · ${ST_TR[n.status]}</small>
+        ${n.line ? `<small>💬 ${esc(n.line)}</small>` : ''}
+        <div class="tl"><button class="btn sm ghost" data-line="${n.playerId}|${n.itemId}|Olmaz!">Olmaz!</button><button class="btn sm ghost" data-line="${n.playerId}|${n.itemId}|Son fiyat.">Son fiyat.</button><button class="btn sm ghost" data-lineask="${n.playerId}|${n.itemId}">💬</button><button class="btn sm" data-price="${n.playerId}|${n.itemId}">Fiyat</button></div></div>`).join('') || '<p class="empty">Henüz pazarlık yok.</p>'}</div>
+      <h2>Akış</h2>${S.log.slice().reverse().map((l) => `<div class="feed">${esc(l.text)}</div>`).join('')}`;
+  } else if (dmTab === 'market') {
+    body = `<button class="btn sm" data-act="addm">+ Satıcı</button>` + S.merchants.map((m) => `
+      <div class="card" style="text-align:left;margin-top:10px"><div class="row"><span class="em">${esc(m.emoji)}</span><b class="grow">${esc(m.name)}</b><button class="btn sm ghost" data-editm="${m.id}">✏️</button><button class="btn sm ghost" data-del="merchant|${m.id}">🗑️</button></div>
+        <div class="seg">${Object.entries(TYPE_LABEL).map(([k, l]) => `<button class="${m.type === k ? 'on' : ''}" data-mtype="${m.id}|${k}">${l}</button>`).join('')}</div>
+        ${S.items.filter((i) => i.merchantId === m.id).map((i) => `<div class="row" style="padding:4px 0"><span class="grow">${esc(i.name)}${i.magical ? ' ✨' : ''}${i.stock !== null ? ` <small>(${i.stock})</small>` : ''}</span><span class="price">${fmt(i.price)}</span><button class="btn sm ghost" data-editi="${i.id}">✏️</button><button class="btn sm ghost" data-del="item|${i.id}">🗑️</button></div>`).join('')}
+        <button class="btn sm ghost" data-addi="${m.id}">+ Eşya</button></div>`).join('');
+  } else {
+    body = `<h2>Oyuncular</h2><div class="list">${S.players.map((p) => `
+      <div class="card" style="text-align:left"><div class="row"><span class="em">${(chr(p.charId) || {}).emoji || ''}</span><span class="grow"><b>${esc(p.name)}</b><small>🎒 ${p.inventory.length} eşya</small></span><span class="price">🪙 ${fmt(p.gold)}</span></div>
+        <div class="tl"><button class="btn sm ghost" data-gold="${p.id}|-10">−10</button><button class="btn sm ghost" data-gold="${p.id}|10">+10</button><button class="btn sm ghost" data-gold="${p.id}|100">+100</button><button class="btn sm ghost" data-goldset="${p.id}">Ayarla</button></div>
+        <div class="tl"><button class="btn sm ${p.advantage ? '' : 'ghost'}" data-adv="${p.id}|${p.advantage ? 0 : 1}">⭐ Avantaj ${p.advantage ? 'AÇIK' : 'ver'}</button><button class="btn sm ghost" data-del="player|${p.id}">🗑️</button></div></div>`).join('') || '<p class="empty">Kimse yok.</p>'}</div>`;
+  }
+  $app.innerHTML = head + body + tabs;
+}
+
+// ---------- render ----------
+function render() {
+  if (!auth) return pick === 'DM' ? renderDMLogin() : renderJoin();
+  if (!S) return void ($app.innerHTML = '<p class="empty">Bağlanıyor…</p>');
+  return S.role === 'dm' ? renderDM() : renderPlayer();
+}
+
+// ---------- olaylar ----------
+$app.addEventListener('input', (e) => {
+  if (e.target.id === 'yr') { view.y = +e.target.value; const n = document.getElementById('ynum'); if (n) n.textContent = fmt(view.y); }
+});
+$app.addEventListener('click', async (e) => {
+  const t = e.target.closest('button'); if (!t) return;
+  const d = t.dataset;
+  if (d.pick) { pick = d.pick; return render(); }
+  if (t.id === 'dm') { pick = 'DM'; return render(); }
+  if (t.id === 'back') { pick = null; return render(); }
+  if (t.id === 'go') {
+    const name = document.getElementById('name').value;
+    if (!pick || !CH.find((c) => c.id === pick)) return toast('Karakter seç.');
+    try { const r = await api('join', { name, charId: pick }); auth = r; store.set(r); connect(); } catch {}
+    return;
+  }
+  if (t.id === 'dmgo') { try { const r = await api('dm/login', { pin: document.getElementById('pin').value }); auth = r; store.set(r); pick = null; connect(); } catch {} return; }
+  if (d.tab) { view.tab = d.tab; view.mid = null; view.iid = null; return render(); }
+  if (d.mid) { view.mid = d.mid; return render(); }
+  if (d.iid) { view.iid = d.iid; view.y = null; return render(); }
+  if (d.step) { const r = document.getElementById('yr'); const st = Math.max(0.01, Math.round(+r.max / 50 * 100) / 100); view.y = Math.min(+r.max, Math.max(+r.min, Math.round((view.y + (+d.step) * st) * 100) / 100)); return render(); }
+  if (d.ap) { view.approach = d.ap; return render(); }
+  if (d.dtab) { dmTab = d.dtab; return render(); }
+  if (d.line) { const [p, i, txt] = d.line.split('|'); return void act('dm/line', { playerId: p, itemId: i, text: txt }); }
+  if (d.lineask) { const [p, i] = d.lineask.split('|'); const v = prompt('Satıcı ne desin?'); return void (v && act('dm/line', { playerId: p, itemId: i, text: v })); }
+  if (d.price) { const [p, i] = d.price.split('|'); const v = prompt('Yeni fiyat (gp):'); return void (v && act('dm/setprice', { playerId: p, itemId: i, price: v })); }
+  if (d.mtype) { const [id, type] = d.mtype.split('|'); const m = S.merchants.find((x) => x.id === id); return void act('dm/merchant', { id, name: m.name, emoji: m.emoji, type }); }
+  if (d.editm) { const m = S.merchants.find((x) => x.id === d.editm); const name = prompt('Satıcı adı:', m.name); if (!name) return; const emoji = prompt('Emoji:', m.emoji) || m.emoji; return void act('dm/merchant', { id: m.id, name, emoji, type: m.type }); }
+  if (d.addi) { const name = prompt('Eşya adı:'); if (!name) return; const price = prompt('Fiyat (gp):'); if (!price) return; const magical = confirm('Büyülü mü? (Hard Gamble yasak olur)'); const stock = prompt('Stok (boş = sınırsız):', ''); return void act('dm/item', { merchantId: d.addi, name, price, magical, stock }); }
+  if (d.editi) { const i = S.items.find((x) => x.id === d.editi); const name = prompt('Eşya adı:', i.name); if (!name) return; const price = prompt('Fiyat (gp):', i.price); if (!price) return; const magical = confirm('Büyülü mü?'); const stock = prompt('Stok (boş = sınırsız):', i.stock ?? ''); return void act('dm/item', { id: i.id, merchantId: i.merchantId, name, price, magical, stock }); }
+  if (d.del) { const [kind, id] = d.del.split('|'); if (confirm('Silinsin mi?')) act('dm/delete', { kind, id }); return; }
+  if (d.gold) { const [id, delta] = d.gold.split('|'); const p = S.players.find((x) => x.id === id); return void act('dm/player', { id, gold: Math.max(0, p.gold + +delta) }); }
+  if (d.goldset) { const v = prompt('Altın:'); return void (v !== null && act('dm/player', { id: d.goldset, gold: v })); }
+  if (d.adv) { const [id, v] = d.adv.split('|'); return void act('dm/player', { id, advantage: v === '1' }); }
+  switch (d.act) {
+    case 'logout': return logout();
+    case 'up': if (view.iid) view.iid = null; else view.mid = null; return render();
+    case 'newday': if (confirm('Yeni gün: tüm pazarlıklar ve yasaklar sıfırlanır.')) act('dm/newday'); return;
+    case 'addm': { const name = prompt('Satıcı adı:'); if (!name) return; const emoji = prompt('Emoji:', '🧑') || '🧑'; return void act('dm/merchant', { name, emoji, type: 'notr' }); }
+    case 'offer': {
+      view.rolling = true; render();
+      const wait = new Promise((r) => setTimeout(r, 900));
+      try { await api('offer', { itemId: view.iid, y: view.y, approach: view.approach }); } catch {}
+      await wait; view.rolling = false; return render();
+    }
+    case 'accept': { const f = currentItem(); try { await api('accept', { itemId: view.iid }); toast(`Satın alındın: ${f.i.name}`); view.iid = null; render(); } catch {} return; }
+    case 'gamble': {
+      if (!confirm('Hard Gamble: %50 indirim.\nEşya KUSURLU olur, hiçbir tüccara satılamaz (0 gp).')) return;
+      try { await api('gamble', { itemId: view.iid }); view.iid = null; render(); } catch {} return;
+    }
+    case 'insight': { const f = currentItem(); return void act('insight', { merchantId: f.m.id }); }
+  }
+});
+
+(async function init() {
+  try { CH = await (await fetch('/api/chars')).json(); } catch {}
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  if (auth) connect();
+  render();
+})();

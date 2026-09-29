@@ -1,0 +1,12 @@
+{
+  "name": "pazar-app",
+  "version": "0.1.0",
+  "description": "D&D pazarlık uygulaması: oyuncu ve DM karşılıklı, canlı",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "e2e": "node test/e2e.js"
+  },
+  "engines": { "node": ">=18" }
+}
