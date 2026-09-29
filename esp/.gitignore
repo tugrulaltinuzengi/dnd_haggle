@@ -2,3 +2,4 @@ secrets.ini
 .pio/
 data/www/*
 !data/www/.gitkeep
+parity-result.txt
