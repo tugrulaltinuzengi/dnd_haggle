@@ -63,40 +63,45 @@ test('wrong PIN and unauthorized access', async () => {
   assert.equal((await call('bid', {}, dm)).status, 403);
 });
 
-test('offer → counter-offer → accept → weekly delivery', async () => {
+test('offer → DM counter → player accepts → settled at once', async () => {
   const it = item('Longsword'); // 15 gp
-  assert.equal((await call('bid', { merchantId: it.merchantId, itemId: it.id, price: 3 }, ali)).status, 400); // < 25%
-  assert.equal((await call('bid', { merchantId: it.merchantId, itemId: it.id, price: 15 }, ali)).status, 400); // ≥ X
+  assert.equal((await call('bid', { merchantId: it.merchantId, itemId: it.id, price: 15 }, ali)).status, 400); // not below the list price
   assert.equal((await call('bid', { merchantId: it.merchantId, itemId: it.id, price: 9, note: 'I will buy on the weekend' }, ali)).status, 200);
   const b1 = (await snap(dm)).bids[0];
   assert.equal(b1.status, 'new');
   assert.equal((await call('dm/bidreply', { id: b1.id, action: 'counter', price: 12, note: 'My final word' }, dm)).status, 200);
   assert.equal((await snap(ali)).bids[0].status, 'counter');
+  assert.equal((await call('dm/bidreply', { id: b1.id, action: 'accept' }, dm)).status, 400); // the player has to answer the counter
   assert.equal((await call('bidreply', { id: b1.id, action: 'accept' }, veli)).status, 403); // someone else's offer
   assert.equal((await call('bidreply', { id: b1.id, action: 'accept' }, ali)).status, 200);
-  assert.equal((await snap(ali)).me.gold, 80); // nothing delivered yet
-  await call('dm/weekly', {}, dm);
   const a = await snap(ali);
-  assert.equal(a.me.gold, 68);
+  assert.equal(a.me.gold, 68); // delivered immediately
   assert.equal(a.me.inventory[0].name, 'Longsword');
+  assert.equal(a.me.inventory[0].paid, 12);
   assert.equal(a.bids[0].status, 'settled');
-  assert.equal(a.week, 2);
+  assert.equal((await call('bidreply', { id: b1.id, action: 'withdraw' }, ali)).status, 400); // closed
 });
 
-test('an offer is not delivered without enough gold, open offers carry over', async () => {
-  const it = item('+1 Shield'); // 400 gp, magical
+test('the DM accepts a player offer at once; too little gold or no stock keeps it open', async () => {
+  const it = item('+1 Shield'); // 400 gp, stock 1
+  const vpid = (await snap(dm)).players.find((p) => p.name === 'Veli').id;
   await call('bid', { merchantId: it.merchantId, itemId: it.id, price: 300 }, veli);
-  const open = (await call('bid', { merchantId: it.merchantId, itemId: it.id, price: 350 }, ali));
-  assert.equal(open.status, 200);
-  const bids = (await snap(dm)).bids;
-  const vb = bids.find((b) => b.price === 300), ab = bids.find((b) => b.price === 350);
-  await call('dm/bidreply', { id: vb.id, action: 'accept' }, dm);
-  await call('dm/weekly', {}, dm);
-  const after = (await snap(dm)).bids;
-  const v = after.find((b) => b.id === vb.id), a = after.find((b) => b.id === ab.id);
-  assert.equal(v.status, 'failed');
-  assert.equal(v.reason, 'Not enough gold');
-  assert.equal(a.status, 'new'); // the unanswered offer stays
+  const vb = (await snap(dm)).bids.find((b) => b.price === 300);
+  const poor = await call('dm/bidreply', { id: vb.id, action: 'accept' }, dm);
+  assert.deepEqual([poor.status, poor.body.error], [400, 'Not enough gold.']);
+  assert.equal((await snap(dm)).bids.find((b) => b.id === vb.id).status, 'new'); // still open
+  await call('dm/player', { id: vpid, gold: 500 }, dm);
+  assert.equal((await call('dm/bidreply', { id: vb.id, action: 'accept' }, dm)).status, 200);
+  const v = await snap(veli);
+  assert.equal(v.me.gold, 200);
+  assert.equal(v.me.inventory.at(-1).name, '+1 Shield');
+  assert.equal(v.merchants.find((m) => m.id === it.merchantId).items.find((i) => i.id === it.id).stock, 0);
+  // someone else's offer on the sold-out item cannot be accepted, but can be rejected
+  await call('bid', { merchantId: it.merchantId, itemId: it.id, price: 350 }, ali);
+  const ab = (await snap(dm)).bids.find((b) => b.price === 350);
+  assert.equal((await call('dm/bidreply', { id: ab.id, action: 'accept' }, dm)).body.error, 'Sold out.');
+  assert.equal((await call('dm/bidreply', { id: ab.id, action: 'reject', note: 'Sold, sorry' }, dm)).status, 200);
+  assert.equal((await snap(ali)).bids.find((b) => b.id === ab.id).status, 'rejected');
 });
 
 test('the DM sends an offer, the player counters and withdraws', async () => {
@@ -117,9 +122,9 @@ test('custom request (an item not in the catalog)', async () => {
   assert.equal((await call('bid', { merchantId: m.id, itemName: '  ', price: 5 }, ali)).status, 400);
 });
 
-test('ledger: purchases, offer deliveries and DM gold adjustments are recorded', async () => {
+test('ledger: purchases, accepted offers and DM gold adjustments are recorded', async () => {
   const dmView = await snap(dm);
-  assert.ok(dmView.ledger.some((e) => e.kind === 'offer' && e.amount === -12 && e.name === 'Longsword'), 'the offer delivery is in the ledger');
+  assert.ok(dmView.ledger.some((e) => e.kind === 'offer' && e.amount === -12 && e.name === 'Longsword'), 'the accepted offer is in the ledger');
 
   const it = item('Tent'); // 2 gp
   assert.equal((await call('accept', { itemId: it.id }, ali)).status, 200);
@@ -137,73 +142,42 @@ test('ledger: purchases, offer deliveries and DM gold adjustments are recorded',
   assert.ok((await snap(veli)).ledger.every((e) => e.playerId !== pid));
 });
 
-test('the player receives patience info (rep, maxRep), never the DC or the type', async () => {
-  const it = item('Dragon Scale'); // Grom, greedy
-  const r = await call('offer', { itemId: it.id, y: 60, approach: 'persuasion' }, veli);
+test('no dice anywhere: removed actions answer 404 and views carry no haggle state', async () => {
+  for (const name of ['offer', 'insight']) assert.equal((await call(name, {}, ali)).status, 404);
+  for (const name of ['dm/line', 'dm/setprice', 'dm/dice', 'dm/affinity', 'dm/affsettings']) assert.equal((await call(name, {}, dm)).status, 404);
+  const raw = JSON.stringify(await snap(ali)) + JSON.stringify(await snap(dm));
+  assert.ok(!/"negs"|"affinity"|"advantage"|"rep"|generous|greedy|minAffinity/.test(raw));
+});
+
+test('hidden items do not exist for players until the DM shows them', async () => {
+  const r = await call('dm/item', { merchantId: 'm1', name: 'Secret Map', price: 30, hidden: true }, dm);
   assert.equal(r.status, 200);
-  const n = (await snap(veli)).negs[it.id];
-  assert.equal(typeof n.rep, 'number');
-  assert.ok(n.maxRep >= 2);
-  const raw = JSON.stringify(await snap(veli));
-  assert.ok(!/"dc"|"u":|generous|neutral|greedy/.test(raw), 'the DC and merchant type (u) must not reach the player');
+  assert.ok(!JSON.stringify(await snap(ali)).includes('Secret Map'));
+  assert.equal((await call('accept', { itemId: r.body.id }, ali)).status, 404);
+  assert.equal((await call('bid', { merchantId: 'm1', itemId: r.body.id, price: 20 }, ali)).status, 404);
+  assert.equal((await snap(dm)).items.find((i) => i.id === r.body.id).hidden, true);
+  await call('dm/item', { id: r.body.id, merchantId: 'm1', name: 'Secret Map', price: 30, hidden: false }, dm);
+  const shown = (await snap(ali)).merchants.find((m) => m.id === 'm1').items.find((i) => i.id === r.body.id);
+  assert.equal(shown.name, 'Secret Map');
 });
 
-const aff = async (tok, mid) => (await snap(tok)).merchants.find((m) => m.id === mid).affinity;
-
-test('affinity: purchases raise it, weekly gain cap of 10', async () => {
-  const tent = item('Tent'); // m1, 2 gp, unlimited stock
-  assert.equal((await aff(veli, 'm1')).value, 20);
-  await call('accept', { itemId: tent.id }, veli);
-  const a1 = await aff(veli, 'm1');
-  assert.equal(a1.value, 22);
-  assert.equal(a1.name, 'Acquaintance');
-  for (let i = 0; i < 5; i++) await call('accept', { itemId: tent.id }, veli);
-  assert.equal((await aff(veli, 'm1')).value, 30); // 20 + cap 10
-});
-
-test('affinity: the DM sets it, the level name and next threshold come back', async () => {
+test('the DM closes a merchant to one player until the next day', async () => {
   const pid = (await snap(dm)).players.find((p) => p.name === 'Veli').id;
-  assert.equal((await call('dm/affinity', { playerId: pid, merchantId: 'm1', value: 65 }, dm)).status, 200);
-  const a = await aff(veli, 'm1');
-  assert.deepEqual([a.value, a.name, a.next, a.nextName], [65, 'Friend', 80, 'Confidant']);
-  assert.equal((await call('dm/affinity', { playerId: pid, merchantId: 'm1', delta: 500 }, dm)).status, 200);
-  assert.equal((await aff(veli, 'm1')).value, 100); // limit
-  await call('dm/affinity', { playerId: pid, merchantId: 'm1', value: 65 }, dm);
-});
-
-test('haggling at the Friend level starts with +1 patience', async () => {
-  const ip = item('Hempen Rope (50 ft)'); // m1 generous Rep 4
-  await call('offer', { itemId: ip.id, y: 0.6, approach: 'persuasion' }, veli);
-  const n = (await snap(veli)).negs[ip.id];
-  assert.equal(n.maxRep, 5);
-});
-
-test('locked item: without enough affinity the name and price are hidden and actions are refused', async () => {
-  const pid = (await snap(dm)).players.find((p) => p.name === 'Veli').id;
-  await call('dm/item', { merchantId: 'm1', name: 'Confidant Blade', price: 30, minAffinity: 80 }, dm);
-  const locked = (await snap(dm)).items.find((i) => i.name === 'Confidant Blade');
-  const view = await snap(veli); // Veli's affinity is 65
-  const entry = view.merchants.find((m) => m.id === 'm1').items.find((i) => i.id === locked.id);
-  assert.equal(entry.locked, true);
-  assert.equal(entry.needName, 'Confidant');
-  assert.ok(!JSON.stringify(view).includes('Confidant Blade'));
-  assert.equal((await call('offer', { itemId: locked.id, y: 20, approach: 'persuasion' }, veli)).status, 400);
-  assert.equal((await call('accept', { itemId: locked.id }, veli)).status, 400);
-  assert.equal((await call('bid', { merchantId: 'm1', itemId: locked.id, price: 20 }, veli)).status, 400);
-  await call('dm/affinity', { playerId: pid, merchantId: 'm1', value: 85 }, dm);
-  const open = (await snap(veli)).merchants.find((m) => m.id === 'm1').items.find((i) => i.id === locked.id);
-  assert.equal(open.name, 'Confidant Blade');
-  assert.equal((await call('offer', { itemId: locked.id, y: 20, approach: 'persuasion' }, veli)).status, 200);
-});
-
-test('anger lowers affinity', async () => {
-  const pid = (await snap(dm)).players.find((p) => p.name === 'Ali').id;
-  await call('dm/affinity', { playerId: pid, merchantId: 'm3', value: 50 }, dm);
-  const it = item('Dragon Scale'); // m3 greedy Rep 2, X=120
-  // offers below 25% are insults: Rep 2 -> 1 -> 0 (angered), each lowers affinity
-  await call('offer', { itemId: it.id, y: 1, approach: 'persuasion' }, ali);
-  await call('offer', { itemId: it.id, y: 1, approach: 'persuasion' }, ali);
-  assert.equal((await aff(ali, 'm3')).value, 50 - 1 - 5); // insult -1, angered -5 (when an insult angers the merchant, only the anger counts)
+  const it = item("Thieves' Tools"); // m2, 25 gp
+  assert.equal((await call('dm/close', { playerId: pid, merchantId: 'm2', closed: true }, dm)).status, 200);
+  const v = await snap(veli);
+  assert.equal(v.merchants.find((m) => m.id === 'm2').closed, true);
+  assert.equal((await snap(ali)).merchants.find((m) => m.id === 'm2').closed, false);
+  assert.equal((await call('bid', { merchantId: 'm2', itemId: it.id, price: 10 }, veli)).body.error, 'The merchant is not trading with you today.');
+  assert.equal((await call('accept', { itemId: it.id }, veli)).body.error, 'The merchant is not trading with you today.');
+  assert.deepEqual((await snap(dm)).closed, [{ playerId: pid, merchantId: 'm2' }]);
+  await call('dm/newday', {}, dm);
+  assert.equal((await snap(veli)).merchants.find((m) => m.id === 'm2').closed, false);
+  assert.deepEqual((await snap(dm)).closed, []);
+  // reopening by hand works too
+  await call('dm/close', { playerId: pid, merchantId: 'm2', closed: true }, dm);
+  await call('dm/close', { playerId: pid, merchantId: 'm2', closed: false }, dm);
+  assert.equal((await snap(veli)).merchants.find((m) => m.id === 'm2').closed, false);
 });
 
 test('ledger CSV and invite address are DM only', async () => {
@@ -301,52 +275,6 @@ test('media: clearing and deleting also remove the file', async () => {
   assert.equal((await getRaw(up.body.url)).status, 404);
 });
 
-test('affinity settings belong to the DM: save, validate, reject invalid, reset', async () => {
-  assert.equal((await call('dm/affsettings', { start: 30 }, ali)).status, 403);
-  assert.equal((await call('dm/affsettings', { start: 30, gain: { buy: 5 } }, dm)).status, 200);
-  let cfg = (await snap(dm)).settings;
-  assert.equal(cfg.affinity.start, 30);
-  assert.equal(cfg.affinity.gain.buy, 5);
-  assert.equal(cfg.affinity.gain.offer, 5);          // untouched values are kept
-  assert.equal(cfg.defaults.start, 20);
-  // a new player joins with the new start value and rises with the new gain
-  const fresh = (await call('join', { name: 'Fresh1', charId: 'bard' })).body.token;
-  assert.equal((await aff(fresh, 'm1')).value, 30);
-  await call('accept', { itemId: item('Hempen Rope (50 ft)').id }, fresh);
-  assert.equal((await aff(fresh, 'm1')).value, 35);   // 30 + buy 5
-  // invalid values are not saved
-  for (const bad of [{ thresholds: [40, 20, 60, 80] }, { thresholds: [10, 20, 30] }, { gain: { buy: 99 } }, { dcMod: [0, 0, 1, -2, -3] }, { start: 500 }, { bonusRepFrom: 9 }]) {
-    assert.equal((await call('dm/affsettings', bad, dm)).status, 400, JSON.stringify(bad));
-  }
-  assert.equal((await snap(dm)).settings.affinity.start, 30);
-  // thresholds decide the level
-  await call('dm/affsettings', { thresholds: [10, 30, 50, 70] }, dm);
-  const pid = (await snap(dm)).players.find((p) => p.name === 'Fresh1').id;
-  await call('dm/affinity', { playerId: pid, merchantId: 'm1', value: 55 }, dm);
-  assert.equal((await aff(fresh, 'm1')).name, 'Friend');   // the 50 threshold was passed
-  // reset
-  await call('dm/affsettings', { reset: true }, dm);
-  cfg = (await snap(dm)).settings;
-  assert.deepEqual(cfg.affinity, cfg.defaults);
-  assert.equal((await aff(fresh, 'm1')).name, 'Customer'); // 55 with the default thresholds (40-59)
-});
-
-test('turning affinity off disables its effects and locks', async () => {
-  const fresh = (await call('join', { name: 'Fresh1', charId: 'bard' })).body.token; // reconnects to the same player
-  const lockedItem = (await snap(dm)).items.find((i) => i.name === 'Confidant Blade'); // needs 80
-  const before = (await aff(fresh, 'm1')).value;
-  await call('dm/affsettings', { enabled: false }, dm);
-  const view = await snap(fresh);
-  assert.equal(view.merchants.find((m) => m.id === 'm1').affinity, null);          // the bar is hidden
-  const it = view.merchants.find((m) => m.id === 'm1').items.find((i) => i.id === lockedItem.id);
-  assert.equal(it.locked, undefined);                                              // the lock is ignored
-  assert.equal(it.name, 'Confidant Blade');
-  assert.equal((await call('accept', { itemId: lockedItem.id }, fresh)).status, 200);
-  await call('dm/affsettings', { enabled: true }, dm);
-  assert.equal((await aff(fresh, 'm1')).value, before);                             // no gains/losses while off
-  await call('dm/affsettings', { reset: true }, dm);
-});
-
 test('item fields: description, type and rarity are validated, an invalid request leaves no half item', async () => {
   const count = () => snap(dm).then((v) => v.items.length);
   const n0 = await count();
@@ -417,4 +345,11 @@ test('capacity: 7 players + the DM connected at once, one change reaches all of 
   streams.forEach((st) => st.close());
   assert.ok(ms < 1500, `the update took ${ms} ms`);
   assert.equal(streams.length, 8);
+});
+
+test('the table holds at most 8 players; known players can still come back', async () => {
+  assert.equal((await call('join', { name: 'Kap5', charId: 'druid' })).status, 200); // 8th
+  const full = await call('join', { name: 'Kap6', charId: 'druid' });
+  assert.deepEqual([full.status, full.body.error], [400, 'The table is full (at most 8 players).']);
+  assert.equal((await call('join', { name: 'ali', charId: 'bard' })).body.token, ali);
 });

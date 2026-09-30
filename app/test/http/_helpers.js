@@ -1,6 +1,6 @@
 'use strict';
 // Black-box helpers: talk to pazar over HTTP only. BASE=http://host:port targets a running server (the ESP);
-// otherwise a fresh Node server is spawned with the dev hooks (dm/reset, dm/dice) enabled.
+// otherwise a fresh Node server is spawned with the dev hooks (dm/reset) enabled.
 const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
@@ -25,7 +25,7 @@ async function start() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pazar-http-'));
   const child = spawn(process.execPath, [path.join(__dirname, '..', '..', 'server.js')], {
     env: { ...process.env, PORT: String(port), DM_PIN, DEV_RESET: '1', PIN_LOCK_MS: String(LOCK_MS),
-      DATA_FILE: path.join(dir, 'data.json'), MEDIA_DIR: path.join(dir, 'media'), DICE_FIXED: '' },
+      DATA_FILE: path.join(dir, 'data.json'), MEDIA_DIR: path.join(dir, 'media') },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise((res, rej) => {
@@ -84,9 +84,8 @@ function client(base) {
     return t;
   };
   const join = async (name, charId = 'bard') => (await call('join', { name, charId })).body.token;
-  const dice = (tok, seq) => call('dm/dice', { seq }, tok);
   const view = async (tok) => { const s = await sse(tok); const v = await s.latest(300); s.close(); return v; };
-  return { call, get, sse, dm, reset, join, dice, view };
+  return { call, get, sse, dm, reset, join, view };
 }
 
 // Minimal PNG header (signature + IHDR) padded to n bytes; enough for the server's sniffing.

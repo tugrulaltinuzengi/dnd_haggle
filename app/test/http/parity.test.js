@@ -1,9 +1,8 @@
 'use strict';
 // HTTP parity suite: must pass against the Node server AND against the ESP firmware (BASE=http://192.168.4.1).
-// Everything goes over HTTP; the reference engine is only used to compute expected outcomes.
+// Everything goes over HTTP.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const E = require('../../engine');
 const CHARS = require('../../public/chars.json');
 const { start, client, fakePng, keys, sleep, LOCK_MS, DM_PIN } = require('./_helpers');
 
@@ -11,7 +10,6 @@ let W, c;
 test.before(async () => { W = await start(); c = client(W.base); });
 test.after(async () => { await W.stop(); });
 
-const bonusOf = (charId, a) => CHARS.find((x) => x.id === charId).bonus[a];
 const merchantOf = (v, name) => v.merchants.find((m) => m.name === name);
 const itemOf = (v, name) => v.merchants.flatMap((m) => m.items).find((i) => i.name === name);
 const T = { timeout: 60000 };
@@ -49,12 +47,12 @@ test('join: validation, idempotent by name, token works', T, async () => {
 test('auth: 401 / 403 / 404 messages', T, async () => {
   const dmT = await c.reset();
   const p = await c.join('Ali');
-  assert.deepEqual((await c.call('offer', {})).body, { error: 'Login required' });
-  assert.equal((await c.call('offer', {}, 'nope')).status, 401);
+  assert.deepEqual((await c.call('bid', {})).body, { error: 'Login required' });
+  assert.equal((await c.call('bid', {}, 'nope')).status, 401);
   assert.deepEqual((await c.call('dm/newday', {}, p)).body, { error: 'DM only' });
   assert.equal((await c.call('dm/newday', {}, p)).status, 403);
-  assert.deepEqual((await c.call('offer', {}, dmT)).body, { error: 'Player only' });
-  assert.equal((await c.call('offer', {}, dmT)).status, 403);
+  assert.deepEqual((await c.call('bid', {}, dmT)).body, { error: 'Player only' });
+  assert.equal((await c.call('bid', {}, dmT)).status, 403);
   assert.deepEqual((await c.call('nonexistent', {}, p)).body, { error: 'Not found' });
   assert.equal((await c.call('nonexistent', {}, p)).status, 404);
   assert.equal((await c.call('dm/nonexistent', {}, dmT)).status, 404);
@@ -79,15 +77,14 @@ test('snapshots: exact key sets for player and DM views', T, async () => {
   const dmT = await c.reset();
   const p = await c.join('Ali', 'bard');
   const pv = await c.view(p);
-  assert.deepEqual(keys(pv), ['bids', 'day', 'dmOnline', 'ledger', 'me', 'merchants', 'negs', 'role', 'week']);
-  assert.deepEqual(keys(pv.me), ['advantage', 'charId', 'gold', 'id', 'inventory', 'name']);
+  assert.deepEqual(keys(pv), ['bids', 'day', 'dmOnline', 'ledger', 'me', 'merchants', 'role', 'week']);
+  assert.deepEqual(keys(pv.me), ['charId', 'gold', 'id', 'inventory', 'name']);
   assert.equal(pv.role, 'player');
   assert.equal(pv.day, 1); assert.equal(pv.week, 1);
   assert.equal(pv.merchants.length, 3);
-  assert.deepEqual(keys(pv.merchants[0]), ['affinity', 'banned', 'emoji', 'id', 'insightTried', 'items', 'name', 'portrait', 'revealed']);
-  assert.deepEqual(keys(pv.merchants[0].affinity), ['from', 'level', 'name', 'next', 'nextName', 'value']);
-  assert.deepEqual(pv.merchants[0].affinity, { value: 20, level: 1, name: 'Acquaintance', from: 20, next: 40, nextName: 'Customer' });
-  assert.deepEqual(keys(pv.merchants[0].items[0]), ['desc', 'id', 'image', 'magical', 'minAffinity', 'name', 'price', 'rarity', 'stock', 'thumb', 'type']);
+  assert.deepEqual(keys(pv.merchants[0]), ['closed', 'emoji', 'id', 'items', 'name', 'portrait']);
+  assert.equal(pv.merchants[0].closed, false);
+  assert.deepEqual(keys(pv.merchants[0].items[0]), ['desc', 'id', 'image', 'magical', 'name', 'price', 'rarity', 'stock', 'thumb', 'type']);
   assert.deepEqual(pv.merchants.map((m) => m.name), ['Bora', 'Marla', 'Grom']);
   assert.deepEqual(pv.merchants.map((m) => m.items.length), [3, 3, 3]);
   assert.equal(itemOf(pv, 'Potion of Flying').stock, 2);
@@ -96,15 +93,14 @@ test('snapshots: exact key sets for player and DM views', T, async () => {
   assert.equal(JSON.stringify(pv).includes('token'), false);
 
   const dv = await c.view(dmT);
-  assert.deepEqual(keys(dv), ['affinity', 'bids', 'chars', 'day', 'items', 'ledger', 'log', 'merchants', 'negs', 'players', 'role', 'settings', 'week']);
+  assert.deepEqual(keys(dv), ['bids', 'chars', 'closed', 'day', 'items', 'ledger', 'log', 'merchants', 'players', 'role', 'week']);
   assert.equal(dv.role, 'dm');
   assert.deepEqual(dv.chars, CHARS.map((x) => x.id));
-  assert.deepEqual(keys(dv.settings), ['affinity', 'defaults', 'levelNames']);
-  assert.deepEqual(keys(dv.settings.affinity), ['bonusRepFrom', 'dcMod', 'enabled', 'gain', 'start', 'thresholds', 'weeklyCap']);
-  assert.deepEqual(dv.settings.levelNames, ['Stranger', 'Acquaintance', 'Customer', 'Friend', 'Confidant']);
   assert.equal(dv.players.length, 1);
-  assert.deepEqual(keys(dv.players[0]), ['advantage', 'charId', 'gold', 'id', 'inventory', 'name']);
-  assert.equal(dv.affinity.length, 3);
+  assert.deepEqual(keys(dv.players[0]), ['charId', 'gold', 'id', 'inventory', 'name']);
+  assert.deepEqual(dv.closed, []);
+  assert.deepEqual(keys(dv.merchants[0]), ['emoji', 'id', 'name']);
+  assert.deepEqual(keys(dv.items[0]), ['hidden', 'id', 'magical', 'merchantId', 'name', 'price', 'stock']);
   assert.equal(dv.items.length, 9);
   assert.equal(JSON.stringify(dv).includes('dmPass'), false);
   assert.equal(JSON.stringify(dv).includes('token'), false);
@@ -133,108 +129,31 @@ test('SSE: bad token 401, dmOnline flips, a second event follows an action', T, 
   ps.close(); ds.close();
 });
 
-test('offer: crit on a natural 20, then accept buys at the deal price', T, async () => {
+test('no dice: the old haggle actions are gone and items carry no damaged flag', T, async () => {
   const dmT = await c.reset();
-  const p = await c.join('Ali', 'bard');
-  await c.dice(dmT, [20]);
-  const v0 = await c.view(p);
-  const item = itemOf(v0, 'Potion of Healing');
-  const ref = E.haggle(E.newNegotiation({ price: 50 }, 'generous'), { X: 50, type: 'generous', Y: 25, approach: 'persuasion', bonus: bonusOf('bard', 'persuasion'), rolls: [20] });
-  assert.equal(ref.outcome, 'crit');
-  assert.deepEqual((await c.call('offer', { itemId: item.id, y: 25, approach: 'persuasion' }, p)).body, { ok: true });
-  const v = await c.view(p);
-  const n = v.negs[item.id];
-  assert.deepEqual(keys(n), ['history', 'lastY', 'line', 'maxRep', 'mood', 'price', 'rep', 'status']);
-  assert.equal(n.status, 'deal'); assert.equal(n.price, ref.price); assert.equal(n.lastY, 25); assert.equal(n.rep, 4); assert.equal(n.maxRep, 4);
-  assert.equal(n.mood, '😊');
-  assert.equal(typeof n.line, 'string'); assert.ok(n.line.length > 0);
-  assert.deepEqual(n.history, [{ y: 25, approach: 'persuasion', rolls: [20], roll: 20, bonus: 6, total: 26, outcome: 'crit' }]);
-  assert.equal(merchantOf(v, 'Bora').affinity.value, 21); // +1 for the deal
-
-  assert.deepEqual((await c.call('accept', { itemId: item.id }, p)).body, { ok: true });
-  const after = await c.view(p);
-  assert.equal(after.me.gold, 55); // 80 - 25
-  assert.equal(after.me.inventory.length, 1);
-  assert.deepEqual(keys(after.me.inventory[0]), ['id', 'image', 'itemId', 'magical', 'name', 'paid', 'thumb']);
-  assert.equal(after.me.inventory[0].paid, 25);
-  assert.equal(after.negs[item.id], undefined);
-  assert.equal(after.ledger.length, 1);
-  assert.equal(after.ledger[0].kind, 'buy'); assert.equal(after.ledger[0].amount, -25); assert.equal(after.ledger[0].list, 50);
-  assert.equal(merchantOf(after, 'Bora').affinity.value, 23); // +2 for the purchase
-});
-
-test('offer: failures and anger match the reference engine, then the merchant refuses for the day', T, async () => {
-  const dmT = await c.reset();
-  const p = await c.join('Ali', 'bard');
-  const v0 = await c.view(p);
-  const item = itemOf(v0, 'Dragon Scale'); // Grom, greedy, 120 gp
-  const neg = E.newNegotiation({ price: 120 }, 'greedy');
-  const bonus = bonusOf('bard', 'persuasion');
-  await c.dice(dmT, [1]);
-  const e1 = E.haggle(neg, { X: 120, type: 'greedy', Y: 60, approach: 'persuasion', bonus, rolls: [1] });
-  assert.equal(e1.outcome, 'fail');
-  assert.equal((await c.call('offer', { itemId: item.id, y: 60, approach: 'persuasion' }, p)).status, 200);
-  let n = (await c.view(p)).negs[item.id];
-  assert.equal(n.status, 'open'); assert.equal(n.price, e1.price); assert.equal(n.rep, neg.rep); assert.equal(n.outcome, undefined);
-  assert.equal(n.history[0].outcome, 'fail');
-
-  const e2 = E.haggle(neg, { X: 120, type: 'greedy', Y: 50, approach: 'persuasion', bonus, rolls: [1] });
-  assert.equal(e2.outcome, 'angered');
-  assert.equal((await c.call('offer', { itemId: item.id, y: 50, approach: 'persuasion' }, p)).status, 200);
-  const v = await c.view(p);
-  n = v.negs[item.id];
-  assert.equal(n.status, 'angered'); assert.equal(n.price, e2.price); assert.equal(n.mood, '😡');
-  assert.equal(merchantOf(v, 'Grom').banned, true);
-  assert.equal(merchantOf(v, 'Grom').affinity.value, 15); // -5 for the anger
-  assert.deepEqual((await c.call('offer', { itemId: item.id, y: 40, approach: 'persuasion' }, p)).body, { error: 'The merchant is not haggling today.' });
-  await c.call('dm/newday', {}, dmT);
-  const v2 = await c.view(p);
-  assert.equal(merchantOf(v2, 'Grom').banned, false);
-  assert.equal(v2.negs[item.id], undefined);
-});
-
-test('offer: input validation messages', T, async () => {
-  const dmT = await c.reset();
-  const p = await c.join('Ali', 'bard');
-  const item = itemOf(await c.view(p), 'Potion of Healing');
-  assert.deepEqual((await c.call('offer', { itemId: 'zzz', y: 5, approach: 'persuasion' }, p)).body, { error: 'No such item' });
-  assert.equal((await c.call('offer', { itemId: 'zzz', y: 5, approach: 'persuasion' }, p)).status, 404);
-  assert.deepEqual((await c.call('offer', { itemId: item.id, y: 5, approach: 'flirt' }, p)).body, { error: 'Choose an approach.' });
-  assert.deepEqual((await c.call('offer', { itemId: item.id, y: 50, approach: 'persuasion' }, p)).body, { error: 'Offer must be below the list price.' });
-  assert.deepEqual((await c.call('offer', { itemId: item.id, y: 'abc', approach: 'persuasion' }, p)).body, { error: 'Invalid number' });
-  await c.dice(dmT, [20]);
-  assert.equal((await c.call('offer', { itemId: item.id, y: 20, approach: 'persuasion' }, p)).status, 200); // deal made
-  assert.deepEqual((await c.call('offer', { itemId: item.id, y: 19, approach: 'persuasion' }, p)).body, { error: 'This negotiation is over.' });
-  const poor = await c.join('Poor', 'rogue'); // 60 gp
-  const sword = itemOf(await c.view(poor), '+1 Shield'); // 400 gp
-  assert.deepEqual((await c.call('accept', { itemId: sword.id }, poor)).body, { error: 'Not enough gold.' });
-});
-
-test('advantage: two dice are rolled and the higher counts, then advantage is spent', T, async () => {
-  const dmT = await c.reset();
-  const p = await c.join('Ali', 'bard');
-  const pl = (await c.view(dmT)).players[0];
-  assert.equal((await c.call('dm/player', { id: pl.id, advantage: true }, dmT)).status, 200);
-  assert.equal((await c.view(p)).me.advantage, true);
-  await c.dice(dmT, [3, 17]);
-  const item = itemOf(await c.view(p), 'Longsword'); // Marla neutral dc15, 15 gp
-  const ref = E.haggle(E.newNegotiation({ price: 15 }, 'neutral'), { X: 15, type: 'neutral', Y: 10, approach: 'persuasion', bonus: 6, rolls: [3, 17] });
-  await c.call('offer', { itemId: item.id, y: 10, approach: 'persuasion' }, p);
-  const v = await c.view(p);
-  assert.deepEqual(v.negs[item.id].history[0].rolls, [3, 17]);
-  assert.equal(v.negs[item.id].history[0].roll, 17);
-  assert.equal(v.negs[item.id].history[0].outcome, ref.outcome);
-  assert.equal(v.me.advantage, false);
-});
-
-test('hard gamble is gone: the action no longer exists and items carry no damaged flag', T, async () => {
-  await c.reset();
   const p = await c.join('Ali', 'bard');
   const v0 = await c.view(p);
   const sword = itemOf(v0, 'Longsword');
-  assert.deepEqual((await c.call('gamble', { itemId: sword.id }, p)).body, { error: 'Not found' });
+  for (const a of ['offer', 'insight', 'gamble']) assert.deepEqual((await c.call(a, { itemId: sword.id }, p)).body, { error: 'Not found' });
+  for (const a of ['dm/line', 'dm/setprice', 'dm/dice', 'dm/affinity', 'dm/affsettings']) assert.equal((await c.call(a, {}, dmT)).status, 404);
   assert.equal((await c.view(p)).me.inventory.length, 0);
   assert.equal(JSON.stringify(v0).includes('damaged'), false);
+});
+
+test('buy at the list price: gold, inventory, ledger; not enough gold', T, async () => {
+  await c.reset();
+  const p = await c.join('Ali', 'bard'); // 80 gp
+  const item = itemOf(await c.view(p), 'Potion of Healing'); // 50 gp
+  assert.deepEqual((await c.call('accept', { itemId: item.id }, p)).body, { ok: true });
+  const after = await c.view(p);
+  assert.equal(after.me.gold, 30);
+  assert.equal(after.me.inventory.length, 1);
+  assert.deepEqual(keys(after.me.inventory[0]), ['id', 'image', 'itemId', 'magical', 'name', 'paid', 'thumb']);
+  assert.equal(after.me.inventory[0].paid, 50);
+  assert.equal(after.ledger.length, 1);
+  assert.equal(after.ledger[0].kind, 'buy'); assert.equal(after.ledger[0].amount, -50); assert.equal(after.ledger[0].list, 50);
+  assert.deepEqual((await c.call('accept', { itemId: item.id }, p)).body, { error: 'Not enough gold.' });
+  assert.deepEqual((await c.call('accept', { itemId: 'zzz' }, p)).body, { error: 'No such item' });
 });
 
 test('stock: last unit sells once, then "Sold out."', T, async () => {
@@ -251,57 +170,65 @@ test('stock: last unit sells once, then "Sold out."', T, async () => {
   assert.deepEqual((await c.call('accept', { itemId: fly.id }, rich2)).body, { error: 'Sold out.' });
 });
 
-test('insight: success reveals the type, one try per day', T, async () => {
-  const dmT = await c.reset();
-  const p = await c.join('Ali', 'druid'); // insight +5
-  const v0 = await c.view(p);
-  const grom = merchantOf(v0, 'Grom');
-  await c.dice(dmT, [1]);
-  assert.equal((await c.call('insight', { merchantId: grom.id }, p)).status, 200);
-  let v = await c.view(p);
-  assert.equal(merchantOf(v, 'Grom').revealed, null); assert.equal(merchantOf(v, 'Grom').insightTried, 'fail');
-  assert.deepEqual((await c.call('insight', { merchantId: grom.id }, p)).body, { error: 'You already tried today.' });
-  await c.call('dm/newday', {}, dmT);
-  await c.dice(dmT, [15]);
-  assert.equal((await c.call('insight', { merchantId: grom.id }, p)).status, 200);
-  v = await c.view(p);
-  assert.equal(merchantOf(v, 'Grom').revealed, 'Greedy');
-  assert.equal((await c.call('insight', { merchantId: grom.id }, p)).status, 200); // no-op once revealed
-});
-
-test('bids: player bid -> DM counter -> player accept -> weekly delivery', T, async () => {
+test('offers: player bid -> DM counter -> player accept settles at once', T, async () => {
   const dmT = await c.reset();
   const p = await c.join('Ali', 'bard');
   const v0 = await c.view(p);
   const item = itemOf(v0, 'Chain Mail'); // 75 gp at Marla
   const marla = merchantOf(v0, 'Marla');
-  assert.deepEqual((await c.call('bid', { merchantId: marla.id, itemId: item.id, price: 75 }, p)).body, { error: 'Offer below the list price.' });
-  assert.deepEqual((await c.call('bid', { merchantId: marla.id, itemId: item.id, price: 10 }, p)).body, { error: 'Must be at least 25% of the list price.' });
+  assert.deepEqual((await c.call('bid', { merchantId: marla.id, itemId: item.id, price: 75 }, p)).body, { error: 'Offer must be below the list price.' });
+  assert.deepEqual((await c.call('bid', { merchantId: marla.id, itemId: item.id, price: 'abc' }, p)).body, { error: 'Invalid number' });
+  assert.equal((await c.call('bid', { merchantId: marla.id, itemId: item.id, price: 10 }, p)).status, 200); // any price below the list is allowed
   assert.equal((await c.call('bid', { merchantId: marla.id, itemId: item.id, price: 50, note: 'cash' }, p)).status, 200);
   let dv = await c.view(dmT);
-  assert.equal(dv.bids.length, 1);
-  const bid = dv.bids[0];
+  assert.equal(dv.bids.length, 2);
+  const bid = dv.bids[1];
   assert.equal(bid.status, 'new'); assert.equal(bid.price, 50); assert.equal(bid.listPrice, 75); assert.equal(bid.itemName, 'Chain Mail'); assert.equal(bid.note, 'cash');
   assert.deepEqual(bid.history.map((h) => h.act), ['offer']);
 
-  assert.equal((await c.call('dm/bidreply', { id: bid.id, action: 'counter', price: 60, note: 'son' }, dmT)).status, 200);
+  assert.equal((await c.call('dm/bidreply', { id: bid.id, action: 'counter', price: 60, note: 'final' }, dmT)).status, 200);
   assert.deepEqual((await c.call('dm/bidreply', { id: bid.id, action: 'zzz' }, dmT)).body, { error: 'Unknown action' });
+  assert.deepEqual((await c.call('dm/bidreply', { id: bid.id, action: 'accept' }, dmT)).body, { error: 'Waiting for the player to answer.' });
   let pv = await c.view(p);
-  assert.equal(pv.bids[0].status, 'counter'); assert.equal(pv.bids[0].price, 60); assert.equal(pv.bids[0].by, 'dm');
+  const mine = pv.bids.find((b) => b.id === bid.id);
+  assert.equal(mine.status, 'counter'); assert.equal(mine.price, 60); assert.equal(mine.by, 'dm'); assert.equal(mine.dmNote, 'final');
   assert.equal((await c.call('bidreply', { id: bid.id, action: 'accept' }, p)).status, 200);
-  assert.equal((await c.view(dmT)).bids[0].status, 'accepted');
 
-  assert.equal((await c.call('dm/weekly', {}, dmT)).status, 200);
   pv = await c.view(p);
-  assert.equal(pv.week, 2); assert.equal(pv.day, 2);
-  assert.equal(pv.me.gold, 20); // 80 - 60
+  assert.equal(pv.week, 1); assert.equal(pv.day, 1);
+  assert.equal(pv.me.gold, 20); // 80 - 60, no waiting for the weekly market
   assert.equal(pv.me.inventory[0].name, 'Chain Mail'); assert.equal(pv.me.inventory[0].paid, 60);
-  assert.equal(pv.bids[0].status, 'settled');
-  assert.equal(pv.ledger[0].kind, 'offer');
-  assert.equal(merchantOf(pv, 'Marla').affinity.value, 25); // +5 for the delivery
+  assert.equal(pv.bids.find((b) => b.id === bid.id).status, 'settled');
+  assert.deepEqual(pv.bids.find((b) => b.id === bid.id).history.map((h) => h.act), ['offer', 'counter', 'accept']);
+  assert.equal(pv.ledger[0].kind, 'offer'); assert.equal(pv.ledger[0].amount, -60); assert.equal(pv.ledger[0].list, 75);
+  assert.deepEqual((await c.call('bidreply', { id: bid.id, action: 'withdraw' }, p)).body, { error: 'This offer is closed.' });
 });
 
-test('bids: DM-initiated offer, player can withdraw or counter; ownership enforced', T, async () => {
+test('offers: the DM accepts at once; not enough gold keeps the offer open; reject closes it', T, async () => {
+  const dmT = await c.reset();
+  const p = await c.join('Ali', 'rogue'); // 60 gp
+  const v0 = await c.view(p);
+  const shield = itemOf(v0, '+1 Shield'); // 400 gp, stock 1
+  const grom = merchantOf(v0, 'Grom');
+  await c.call('bid', { merchantId: grom.id, itemId: shield.id, price: 300 }, p);
+  const bid = (await c.view(dmT)).bids[0];
+  assert.deepEqual((await c.call('dm/bidreply', { id: bid.id, action: 'accept' }, dmT)).body, { error: 'Not enough gold.' });
+  assert.equal((await c.view(dmT)).bids[0].status, 'new');
+  await c.call('dm/player', { id: v0.me.id, gold: 350 }, dmT);
+  assert.deepEqual((await c.call('dm/bidreply', { id: bid.id, action: 'accept' }, dmT)).body, { ok: true });
+  const pv = await c.view(p);
+  assert.equal(pv.me.gold, 50);
+  assert.equal(itemOf(pv, '+1 Shield').stock, 0);
+  assert.equal(pv.bids[0].status, 'settled');
+  const q = await c.join('Veli', 'wizard');
+  await c.call('bid', { merchantId: grom.id, itemId: shield.id, price: 100 }, q);
+  const b2 = (await c.view(dmT)).bids[1];
+  assert.deepEqual((await c.call('dm/bidreply', { id: b2.id, action: 'accept' }, dmT)).body, { error: 'Sold out.' });
+  assert.equal((await c.call('dm/bidreply', { id: b2.id, action: 'reject', note: 'Gone' }, dmT)).status, 200);
+  assert.equal((await c.view(q)).bids[0].status, 'rejected');
+});
+
+test('offers: DM-initiated offer, player can withdraw or counter; ownership enforced', T, async () => {
   const dmT = await c.reset();
   const p = await c.join('Ali', 'bard');
   const q = await c.join('Veli', 'barbarian');
@@ -315,21 +242,86 @@ test('bids: DM-initiated offer, player can withdraw or counter; ownership enforc
   assert.equal((await c.call('bidreply', { id: bid.id, action: 'accept' }, q)).status, 403);
   assert.equal((await c.call('bidreply', { id: bid.id, action: 'counter', price: 1.25 }, p)).status, 200);
   assert.equal((await c.view(dmT)).bids[0].status, 'new');
+  assert.deepEqual((await c.call('bidreply', { id: bid.id, action: 'accept' }, p)).body, { error: 'There is no counter-offer to accept.' });
   assert.equal((await c.call('bidreply', { id: bid.id, action: 'withdraw' }, p)).status, 200);
   assert.equal((await c.view(p)).bids[0].status, 'withdrawn');
   assert.deepEqual((await c.call('bidreply', { id: bid.id, action: 'withdraw' }, p)).body, { error: 'This offer is closed.' });
 });
 
+test('offers: a custom request for an item not in the catalog is delivered by name', T, async () => {
+  const dmT = await c.reset();
+  const p = await c.join('Ali', 'bard');
+  const bora = merchantOf(await c.view(p), 'Bora');
+  assert.deepEqual((await c.call('bid', { merchantId: bora.id, itemName: '  ', price: 5 }, p)).body, { error: 'Cannot be empty' });
+  assert.equal((await c.call('bid', { merchantId: bora.id, itemName: 'Dragon Egg', price: 70 }, p)).status, 200);
+  const bid = (await c.view(dmT)).bids[0];
+  assert.equal(bid.listPrice, null);
+  assert.equal((await c.call('dm/bidreply', { id: bid.id, action: 'accept' }, dmT)).status, 200);
+  const pv = await c.view(p);
+  assert.equal(pv.me.gold, 10);
+  assert.deepEqual([pv.me.inventory[0].name, pv.me.inventory[0].itemId, pv.me.inventory[0].paid], ['Dragon Egg', null, 70]);
+});
+
+test('hidden items: invisible to players, cannot be bought or bid on, the DM still sees them', T, async () => {
+  const dmT = await c.reset();
+  const p = await c.join('Ali', 'bard');
+  const bora = merchantOf(await c.view(dmT), 'Bora');
+  const r = await c.call('dm/item', { merchantId: bora.id, name: 'Secret Map', price: 30, hidden: true }, dmT);
+  assert.equal(r.status, 200);
+  assert.equal(JSON.stringify(await c.view(p)).includes('Secret Map'), false);
+  assert.deepEqual((await c.call('accept', { itemId: r.body.id }, p)).body, { error: 'No such item' });
+  assert.deepEqual((await c.call('bid', { merchantId: bora.id, itemId: r.body.id, price: 5 }, p)).body, { error: 'No such item' });
+  assert.equal((await c.view(dmT)).items.find((i) => i.id === r.body.id).hidden, true);
+  await c.call('dm/item', { id: r.body.id, merchantId: bora.id, name: 'Secret Map', price: 30, hidden: false }, dmT);
+  assert.equal(itemOf(await c.view(p), 'Secret Map').price, 30);
+});
+
+test('close: the DM closes a merchant to one player for the day; newday reopens', T, async () => {
+  const dmT = await c.reset();
+  const p = await c.join('Ali', 'bard');
+  const q = await c.join('Veli', 'bard');
+  const pv = await c.view(p);
+  const grom = merchantOf(pv, 'Grom'), scale = itemOf(pv, 'Dragon Scale');
+  assert.equal((await c.call('dm/close', { playerId: pv.me.id, merchantId: grom.id, closed: true }, dmT)).status, 200);
+  assert.equal((await c.call('dm/close', { playerId: 'zzz', merchantId: grom.id, closed: true }, dmT)).status, 404);
+  assert.equal(merchantOf(await c.view(p), 'Grom').closed, true);
+  assert.equal(merchantOf(await c.view(q), 'Grom').closed, false);
+  assert.deepEqual((await c.view(dmT)).closed, [{ playerId: pv.me.id, merchantId: grom.id }]);
+  const msg = { error: 'The merchant is not trading with you today.' };
+  assert.deepEqual((await c.call('bid', { merchantId: grom.id, itemId: scale.id, price: 60 }, p)).body, msg);
+  assert.deepEqual((await c.call('accept', { itemId: scale.id }, p)).body, msg);
+  assert.equal((await c.call('bid', { merchantId: grom.id, itemId: scale.id, price: 60 }, q)).status, 200);
+  await c.call('dm/newday', {}, dmT);
+  const v = await c.view(p);
+  assert.equal(v.day, 2); assert.equal(merchantOf(v, 'Grom').closed, false);
+  assert.deepEqual((await c.view(dmT)).closed, []);
+  await c.call('dm/close', { playerId: pv.me.id, merchantId: grom.id, closed: true }, dmT);
+  await c.call('dm/close', { playerId: pv.me.id, merchantId: grom.id, closed: false }, dmT);
+  assert.equal(merchantOf(await c.view(p), 'Grom').closed, false);
+  assert.ok((await c.view(dmT)).log.some((l) => l.text === 'New day: 2'));
+  await c.call('dm/weekly', {}, dmT);
+  const w = await c.view(p);
+  assert.deepEqual([w.week, w.day], [2, 3]);
+});
+
+test('players: at most 8 at the table, a known name still rejoins', T, async () => {
+  await c.reset();
+  const first = await c.join('P1');
+  for (let i = 2; i <= 8; i++) assert.ok(await c.join('P' + i));
+  assert.deepEqual((await c.call('join', { name: 'P9', charId: 'bard' })).body, { error: 'The table is full (at most 8 players).' });
+  assert.equal((await c.call('join', { name: 'p1', charId: 'bard' })).body.token, first);
+});
+
 test('DM: merchants and items CRUD, variants, validation', T, async () => {
   const dmT = await c.reset();
-  assert.deepEqual((await c.call('dm/merchant', { name: 'New', type: 'zzz' }, dmT)).body, { error: 'Choose a type.' });
-  assert.deepEqual((await c.call('dm/merchant', { name: '', type: 'neutral' }, dmT)).body, { error: 'Cannot be empty' });
-  assert.equal((await c.call('dm/merchant', { name: 'Kara', emoji: '🦊', type: 'neutral' }, dmT)).status, 200);
+  assert.deepEqual((await c.call('dm/merchant', { name: '' }, dmT)).body, { error: 'Cannot be empty' });
+  assert.equal((await c.call('dm/merchant', { name: 'Kara', emoji: '🦊' }, dmT)).status, 200);
   let dv = await c.view(dmT);
   assert.equal(dv.merchants.length, 4);
   const kara = dv.merchants[3];
-  assert.equal(kara.name, 'Kara'); assert.equal(kara.emoji, '🦊'); assert.equal(kara.type, 'neutral');
-  const added = await c.call('dm/item', { merchantId: kara.id, name: 'Sword', price: 10.5, magical: false, stock: 3, desc: 'sharp', type: 'weapon', rarity: 'rare', minAffinity: 30 }, dmT);
+  assert.deepEqual(keys(kara), ['emoji', 'id', 'name']);
+  assert.equal(kara.name, 'Kara'); assert.equal(kara.emoji, '🦊');
+  const added = await c.call('dm/item', { merchantId: kara.id, name: 'Sword', price: 10.5, magical: false, stock: 3, desc: 'sharp', type: 'weapon', rarity: 'rare' }, dmT);
   assert.equal(added.status, 200); assert.match(added.body.id, /^[0-9a-f]{10}$/);
   assert.deepEqual((await c.call('dm/item', { merchantId: kara.id, name: 'X', price: 1, type: 'mystery' }, dmT)).body, { error: 'Type is invalid' });
   assert.deepEqual((await c.call('dm/item', { merchantId: kara.id, name: 'X', price: 1, rarity: 'mystery' }, dmT)).body, { error: 'Rarity is invalid' });
@@ -337,19 +329,13 @@ test('DM: merchants and items CRUD, variants, validation', T, async () => {
   assert.equal((await c.call('dm/item', { merchantId: 'yok', name: 'X', price: 1 }, dmT)).status, 404);
   dv = await c.view(dmT);
   const it = dv.items.find((i) => i.id === added.body.id);
-  assert.deepEqual({ ...it, id: undefined }, { id: undefined, merchantId: kara.id, name: 'Sword', price: 10.5, magical: false, stock: 3, minAffinity: 30, desc: 'sharp', type: 'weapon', rarity: 'rare' });
+  assert.deepEqual({ ...it, id: undefined }, { id: undefined, merchantId: kara.id, name: 'Sword', price: 10.5, magical: false, stock: 3, desc: 'sharp', type: 'weapon', rarity: 'rare', hidden: false });
 
   const variant = await c.call('dm/itemvariant', { id: it.id, name: 'Sword +1' }, dmT);
   assert.equal(variant.status, 200);
   dv = await c.view(dmT);
   const copy = dv.items.find((i) => i.id === variant.body.id);
   assert.equal(copy.name, 'Sword +1'); assert.equal(copy.price, 10.5); assert.equal(copy.merchantId, kara.id);
-
-  // locked item shows only a teaser to players whose affinity is below the requirement
-  const p = await c.join('Ali');
-  const locked = (await c.view(p)).merchants[3].items.find((i) => i.id === it.id);
-  assert.deepEqual(locked, { id: it.id, locked: true, need: 30, needName: 'Acquaintance' });
-  assert.deepEqual((await c.call('accept', { itemId: it.id }, p)).body, { error: 'Not enough affinity for this item.' });
 
   assert.equal((await c.call('dm/delete', { kind: 'item', id: copy.id }, dmT)).status, 200);
   assert.deepEqual((await c.call('dm/delete', { kind: 'zzz', id: 'x' }, dmT)).body, { error: 'Unknown kind' });
@@ -358,57 +344,19 @@ test('DM: merchants and items CRUD, variants, validation', T, async () => {
   assert.equal(dv.merchants.length, 3); assert.equal(dv.items.length, 9);
 });
 
-test('DM: player gold/advantage, ledger entry, delete player, line and setprice', T, async () => {
+test('DM: player gold, ledger entry, delete player', T, async () => {
   const dmT = await c.reset();
   const p = await c.join('Ali', 'bard');
   const pl = (await c.view(dmT)).players[0];
   assert.equal((await c.call('dm/player', { id: pl.id, gold: 120.5 }, dmT)).status, 200);
-  let pv = await c.view(p);
+  const pv = await c.view(p);
   assert.equal(pv.me.gold, 120.5);
   assert.equal(pv.ledger[0].kind, 'dm'); assert.equal(pv.ledger[0].amount, 40.5); assert.equal(pv.ledger[0].name, 'DM gold adjustment');
   assert.equal((await c.call('dm/player', { id: 'yok', gold: 1 }, dmT)).status, 404);
   assert.deepEqual((await c.call('dm/player', { id: pl.id, gold: -5 }, dmT)).body, { error: 'Invalid number' });
-
-  const item = itemOf(pv, 'Tent');
-  assert.deepEqual((await c.call('dm/line', { playerId: pl.id, itemId: item.id, text: 'Hello' }, dmT)).body, { error: 'No active negotiation' });
-  assert.deepEqual((await c.call('dm/setprice', { playerId: pl.id, itemId: item.id, price: 1 }, dmT)).body, { error: 'No active negotiation' });
-  await c.dice(dmT, [1]);
-  await c.call('offer', { itemId: item.id, y: 1.5, approach: 'persuasion' }, p); // Tent 2 gp
-  assert.equal((await c.call('dm/line', { playerId: pl.id, itemId: item.id, text: 'Hmm, peki.' }, dmT)).status, 200);
-  assert.equal((await c.call('dm/setprice', { playerId: pl.id, itemId: item.id, price: 1.75 }, dmT)).status, 200);
-  pv = await c.view(p);
-  assert.equal(pv.negs[item.id].line, 'Hmm, peki.'); assert.equal(pv.negs[item.id].price, 1.75); assert.equal(pv.negs[item.id].status, 'deal');
-  const dv = await c.view(dmT);
-  assert.equal(dv.negs.length, 1);
-  assert.deepEqual(keys(dv.negs[0]), ['item', 'itemId', 'last', 'line', 'playerId', 'price', 'rep', 'maxRep', 'status'].sort());
-
   assert.equal((await c.call('dm/delete', { kind: 'player', id: pl.id }, dmT)).status, 200);
   assert.equal((await c.view(dmT)).players.length, 0);
-  assert.equal((await c.call('offer', {}, p)).status, 401); // deleted player's token is dead
-});
-
-test('affinity: DM settings validation, save, reset; manual set', T, async () => {
-  const dmT = await c.reset();
-  const p = await c.join('Ali');
-  const dv0 = await c.view(dmT);
-  const pid = dv0.players[0].id, mid = dv0.merchants[0].id;
-  assert.deepEqual((await c.call('dm/affsettings', { start: 500 }, dmT)).body, { error: 'Start: must be between 0 and 100' });
-  assert.deepEqual((await c.call('dm/affsettings', { thresholds: [10, 20] }, dmT)).body, { error: 'Level thresholds: must have 4 values' });
-  assert.deepEqual((await c.call('dm/affsettings', { thresholds: [10, 10, 30, 40] }, dmT)).body, { error: 'Level thresholds must be increasing' });
-  assert.equal((await c.call('dm/affsettings', { start: 30, weeklyCap: 4, gain: { buy: 3 } }, dmT)).status, 200);
-  let dv = await c.view(dmT);
-  assert.equal(dv.settings.affinity.start, 30); assert.equal(dv.settings.affinity.weeklyCap, 4); assert.equal(dv.settings.affinity.gain.buy, 3); assert.equal(dv.settings.affinity.gain.offer, 5);
-  assert.equal((await c.view(p)).merchants[0].affinity.value, 30);
-  assert.equal((await c.call('dm/affinity', { playerId: pid, merchantId: mid, value: 85 }, dmT)).status, 200);
-  const a = (await c.view(p)).merchants[0].affinity;
-  assert.deepEqual(a, { value: 85, level: 4, name: 'Confidant', from: 80, next: null, nextName: null });
-  assert.equal((await c.call('dm/affinity', { playerId: pid, merchantId: mid, delta: -100 }, dmT)).status, 200);
-  assert.equal((await c.view(p)).merchants[0].affinity.value, 0);
-  assert.equal((await c.call('dm/affsettings', { reset: true }, dmT)).status, 200);
-  dv = await c.view(dmT);
-  assert.equal(dv.settings.affinity.start, 20);
-  assert.equal((await c.call('dm/affsettings', { enabled: false }, dmT)).status, 200);
-  assert.equal((await c.view(p)).merchants[0].affinity, null);
+  assert.equal((await c.call('bid', {}, p)).status, 401); // deleted player's token is dead
 });
 
 test('DM password: change, old PIN dies, other DM sessions die, no plaintext in views', T, async () => {
@@ -444,20 +392,6 @@ test('DM login: wrong PIN, lockout after 5 failures, unlock after the lock time'
   assert.deepEqual(locked.body, { error: 'Too many attempts. Wait a while.' });
   await sleep(LOCK_MS + 500);
   assert.equal((await c.call('dm/login', { pin: DM_PIN })).status, 200);
-});
-
-test('newday and weekly clear negotiations and bans', T, async () => {
-  const dmT = await c.reset();
-  const p = await c.join('Ali');
-  const item = itemOf(await c.view(p), 'Tent');
-  await c.dice(dmT, [1]);
-  await c.call('offer', { itemId: item.id, y: 1.5, approach: 'persuasion' }, p);
-  assert.ok((await c.view(p)).negs[item.id]);
-  await c.call('dm/newday', {}, dmT);
-  const v = await c.view(p);
-  assert.equal(v.day, 2); assert.equal(v.negs[item.id], undefined);
-  const dv = await c.view(dmT);
-  assert.ok(dv.log.some((l) => l.text === 'New day: 2'));
 });
 
 test('ledger CSV: DM only, BOM, header, quoted rows', T, async () => {

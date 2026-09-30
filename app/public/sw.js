@@ -1,5 +1,5 @@
 // Minimal service worker for the installable app: network first, cache when offline.
-const C = 'pazar-v1';
+const C = 'pazar-v2';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', (e) => {
