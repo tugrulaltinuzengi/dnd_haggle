@@ -267,7 +267,7 @@ static void dItem(JsonObject b, JsonObject out) {
   String desc = jsSlice(jsTrim(strOf(b["desc"])), 200);
   bool typeNull = b["type"].isNull() || (b["type"].is<const char*>() && !b["type"].as<const char*>()[0]);
   String type = enumOf(b["type"], ITEM_TYPES, 7, nullptr, "Type");
-  String rarity = enumOf(b["rarity"], RARITIES, 7, "none", "Nadirlik");
+  String rarity = enumOf(b["rarity"], RARITIES, 7, "none", "Rarity");
   JsonObject it;
   if (truthy(b["id"])) it = itemOf(b["id"]); else { if (S["items"].size() >= MAX_ITEMS) fail("At most 80 items."); it = S["items"].as<JsonArray>().add<JsonObject>(); it["id"] = newId(); }
   it["merchantId"] = b["merchantId"].as<const char*>(); it["name"] = name; it["price"] = price; it["magical"] = magical;

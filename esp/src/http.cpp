@@ -4,6 +4,7 @@
 #include "views.h"
 #include "media.h"
 #include "config.h"
+#include "relay.h"
 #include <LittleFS.h>
 #include <vector>
 
@@ -49,6 +50,7 @@ Slot* slotFor(const String& who) {
 }
 
 bool dmOnline() {
+  if (relayDmOnline()) return true;
   for (auto& s : slots) if (s.used && s.who == "dm" && s.es && s.es->count() > 0) return true;
   return false;
 }
@@ -56,12 +58,24 @@ bool dmOnline() {
 void sseCloseDmExcept(const String&) {
   // All DM tabs share one stream; the browser reconnects with its (still valid) token.
   for (auto& s : slots) if (s.used && s.who == "dm" && s.es) s.es->close();
+  relayCloseDm();
 }
+
+bool sseResolve(const char* token, String& who) {
+  Lock l;
+  Auth a = authOf(token);
+  if (a.role == Auth::NONE) return false;
+  who = a.role == Auth::DM ? String("dm") : String(a.player["id"].as<const char*>());
+  return true;
+}
+
+String sseView(const String& who) { return viewFor(who); }
 
 void httpLoop() {
   static uint32_t beat = 0;
   if (millis() - beat > 25000) { beat = millis(); stateRequestBroadcast(); }   // keeps proxies and phones from dropping idle streams
   if (!stateTakeBroadcast(150)) return;
+  relayNotify();
   for (auto& s : slots) {
     if (!s.used || !s.es || s.es->count() == 0) continue;
     String v = viewFor(s.who);
@@ -98,6 +112,7 @@ static const char* mimeOf(const String& p) {
   if (p.endsWith(".svg")) return "image/svg+xml";
   if (p.endsWith(".webmanifest")) return "application/manifest+json";
   if (p.endsWith(".png")) return "image/png";
+  if (p.endsWith(".apk")) return "application/vnd.android.package-archive";
   return "application/octet-stream";
 }
 
@@ -111,10 +126,11 @@ static void serveStatic(AsyncWebServerRequest* r) {
   if (path.indexOf("..") >= 0 || !LittleFS.exists(fs)) {
     // Unknown page: hand out the app, so captive-portal probes (/generate_204, /hotspot-detect.html, ...) open pazar.
     fs = "/www/index.html"; path = "/index.html";
-    if (!LittleFS.exists(fs)) { r->send(200, "text/html; charset=utf-8", "<h1>pazar</h1><p>Web dosyalari yuklenmedi (uploadfs).</p>"); return; }
+    if (!LittleFS.exists(fs)) { r->send(200, "text/html; charset=utf-8", "<h1>pazar</h1><p>Web files are not uploaded yet (uploadfs).</p>"); return; }
   }
   AsyncWebServerResponse* res = r->beginResponse(LittleFS, fs, mimeOf(path));
   res->addHeader("Cache-Control", "no-cache");
+  if (path.endsWith(".apk")) res->addHeader("Content-Disposition", "attachment; filename=\"pazar.apk\"");
   r->send(res);
 }
 
@@ -155,11 +171,11 @@ static void handleAction(AsyncWebServerRequest* r, const String& name, const uin
       String low = nm; low.toLowerCase();
       for (JsonObject x : S["players"].as<JsonArray>()) { String n2 = x["name"].as<const char*>(); n2.toLowerCase(); if (n2 == low) { p = x; break; } }
       if (p.isNull()) {
-        if (S["players"].size() >= MAX_PLAYERS) fail("Masa dolu (en fazla 8 oyuncu).");
+        if (S["players"].size() >= MAX_PLAYERS) fail("The table is full (at most 8 players).");
         p = S["players"].as<JsonArray>().add<JsonObject>();
         p["id"] = newId(); p["token"] = newToken(); p["name"] = nm; p["charId"] = ch["id"].as<const char*>();
         p["gold"] = ch["gold"].as<double>(); p["advantage"] = false; p["inventory"].to<JsonArray>();
-        logLine(nm + " pazara girdi (" + ch["name"].as<const char*>() + ")", p["id"]);
+        logLine(nm + " entered the market (" + ch["name"].as<const char*>() + ")", p["id"]);
       }
       changed();
       JsonDocument o; o["token"] = p["token"].as<const char*>(); o["role"] = "player";
@@ -168,6 +184,11 @@ static void handleAction(AsyncWebServerRequest* r, const String& name, const uin
     }
     if (name == "dm/login") {
       uint32_t ip = r->client()->remoteIP();
+      if (ip == 0x0100007F && r->hasHeader("x-client-ip")) {   // 127.0.0.1: request relayed by relay.cpp, which carries the real client address
+        uint32_t h = 2166136261u; String c = r->header("x-client-ip");
+        for (size_t i = 0; i < c.length(); i++) { h ^= (uint8_t)c[i]; h *= 16777619u; }
+        ip = h;
+      }
       if (pinLocked(ip)) fail("Too many attempts. Wait a while.", 429);
       if (!checkDmPass(strOf(b["pin"]))) { pinFailed(ip); fail("Wrong PIN", 403); }
       pinOk(ip);
@@ -217,14 +238,14 @@ static void handleAll(AsyncWebServerRequest* r) {
       Auth a;
       { Lock l; a = authOf(tp ? tp->value().c_str() : ""); }
       if (a.role == Auth::NONE) { sendErr(r, 401, "Login required"); return; }
-      if (sseCount() >= MAX_SSE || ESP.getFreeHeap() < MIN_FREE_HEAP) { sendErr(r, 503, "Kapasite dolu"); return; }
+      if (sseCount() + relaySseCount() >= MAX_SSE || ESP.getFreeHeap() < MIN_FREE_HEAP) { sendErr(r, 503, "At capacity, try again"); return; }
       Slot* s = slotFor(a.role == Auth::DM ? String("dm") : String(a.player["id"].as<const char*>()));
-      if (!s) { sendErr(r, 503, "Kapasite dolu"); return; }
+      if (!s) { sendErr(r, 503, "At capacity, try again"); return; }
       r->send(new AsyncEventSourceResponse(s->es));
       return;
     }
     if (get && name == "ping") {
-      char b[160]; snprintf(b, sizeof b, "{\"ok\":true,\"version\":\"%s\",\"heap\":%u,\"minHeap\":%u,\"sse\":%u}", PAZAR_VERSION, ESP.getFreeHeap(), ESP.getMinFreeHeap(), (unsigned)sseCount());
+      char b[200]; snprintf(b, sizeof b, "{\"ok\":true,\"version\":\"%s\",\"heap\":%u,\"minHeap\":%u,\"sse\":%u,\"relay\":%s}", PAZAR_VERSION, ESP.getFreeHeap(), ESP.getMinFreeHeap(), (unsigned)(sseCount() + relaySseCount()), relayConnected() ? "true" : "false");
       sendJson(r, 200, b); return;
     }
     if (get && name == "limits") { sendJson(r, 200, "{\"item\":122880,\"thumb\":61440,\"portrait\":122880}"); return; }
@@ -255,14 +276,14 @@ static void handleAll(AsyncWebServerRequest* r) {
       } catch (const HttpError& e) { mediaAbort(); sendErr(r, e.code, e.what()); }
       return;
     }
-    if (!post) { sendErr(r, 404, "Yok"); return; }
+    if (!post) { sendErr(r, 404, "Not found"); return; }
     handleAction(r, name, bd ? (const uint8_t*)(bd + 1) : nullptr, bd ? bd->len : 0);
     return;
   }
 
   if (get && url.startsWith("/media/")) {
     String p = mediaPathOf(url);
-    if (!p.length() || !LittleFS.exists(p)) { r->send(404, "text/plain", "Yok"); return; }
+    if (!p.length() || !LittleFS.exists(p)) { r->send(404, "text/plain", "Not found"); return; }
     AsyncWebServerResponse* res = r->beginResponse(LittleFS, p, mediaMime(p));
     res->addHeader("Cache-Control", "public, max-age=31536000, immutable");
     res->addHeader("X-Content-Type-Options", "nosniff");

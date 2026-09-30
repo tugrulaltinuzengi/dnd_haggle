@@ -5,6 +5,7 @@
 #include "config.h"
 #include "state.h"
 #include "http.h"
+#include "relay.h"
 
 static DNSServer dns;
 static AsyncWebServer server(80);
@@ -12,11 +13,9 @@ static AsyncWebServer server(80);
 void setup() {
   Serial.begin(115200);
   delay(200);
-  // Dev builds may also join the home Wi-Fi, but only when real credentials are set (a failing STA scan disturbs the AP).
   bool sta = false;
-#ifdef DEV_STA
+  // Join the home Wi-Fi whenever real credentials are set (needed for the remote-access relay). A failing STA scan disturbs the AP, so placeholders are ignored.
   sta = strlen(STA_SSID) > 0 && strcmp(STA_SSID, "REPLACE") != 0 && strcmp(STA_SSID, "HomeWifi") != 0;
-#endif
   WiFi.mode(sta ? WIFI_AP_STA : WIFI_AP);
   WiFi.onEvent([](arduino_event_id_t ev, arduino_event_info_t info) {
     if (ev == ARDUINO_EVENT_WIFI_AP_STACONNECTED) Serial.printf("wifi: station connected %02x:%02x:%02x:%02x:%02x:%02x\n", info.wifi_ap_staconnected.mac[0], info.wifi_ap_staconnected.mac[1], info.wifi_ap_staconnected.mac[2], info.wifi_ap_staconnected.mac[3], info.wifi_ap_staconnected.mac[4], info.wifi_ap_staconnected.mac[5]);
@@ -35,6 +34,7 @@ void setup() {
   stateBegin();
   httpBegin(server);
   server.begin();
+  relayBegin();
   Serial.printf("pazar %s up: AP %s ip=%s heap=%u\n", PAZAR_VERSION, AP_SSID, WiFi.softAPIP().toString().c_str(), ESP.getFreeHeap());
 }
 

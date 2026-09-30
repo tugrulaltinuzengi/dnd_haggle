@@ -4,6 +4,9 @@
 #include "../lib/engine/engine.h"
 #include <vector>
 
+// ArduinoJson's serializeJson(x, String&) CLEARS the string first, so appending needs a temporary.
+static void jsonAppend(String& out, JsonVariantConst v) { String t; serializeJson(v, t); out += t; }
+
 static void affViewTo(JsonObject o, const AffCfg& c, const char* pid, const char* mid) {
   int v = affOf(pid, mid), lv = affLevel(c, v);
   o["value"] = v; o["level"] = lv; o["name"] = LEVEL_NAMES[lv]; o["from"] = levelFrom(c, lv);
@@ -31,7 +34,7 @@ static void affJson(String& out, const AffCfg& c) {
   d["bonusRepFrom"] = c.bonusRepFrom;
   JsonObject g = d["gain"].to<JsonObject>();
   g["buy"] = c.gainBuy; g["offer"] = c.gainOffer; g["deal"] = c.gainDeal; g["ret"] = c.gainRet; g["angered"] = c.gainAngered;
-  serializeJson(d, out);
+  jsonAppend(out, d);
 }
 
 String playerViewJson(JsonObject p) {
@@ -133,13 +136,13 @@ String dmViewJson() {
   {   // bids
     JsonDocument d; JsonArray a = d.to<JsonArray>();
     for (JsonObject o : S["offers"].as<JsonArray>()) offerViewTo(a.add<JsonObject>(), o);
-    out += ",\"bids\":"; serializeJson(d, out);
+    out += ",\"bids\":"; jsonAppend(out, d);
   }
   {   // last 150 ledger entries, written straight from S
     JsonArray l = S["ledger"].as<JsonArray>();
     size_t from = l.size() > 150 ? l.size() - 150 : 0;
     out += ",\"ledger\":[";
-    for (size_t i = from; i < l.size(); i++) { if (i > from) out += ','; serializeJson(l[i], out); }
+    for (size_t i = from; i < l.size(); i++) { if (i > from) out += ','; jsonAppend(out, l[i]); }
     out += ']';
   }
   {   // affinity matrix
@@ -149,7 +152,7 @@ String dmViewJson() {
       o["playerId"] = p["id"].as<const char*>(); o["merchantId"] = m["id"].as<const char*>();
       affViewTo(o, cfg, p["id"], m["id"]);
     }
-    out += ",\"affinity\":"; serializeJson(d, out);
+    out += ",\"affinity\":"; jsonAppend(out, d);
   }
   out += ",\"settings\":{\"affinity\":"; affJson(out, cfg);
   out += ",\"defaults\":"; affJson(out, AffCfg{true, 20, 10, {20, 40, 60, 80}, {0, 0, -1, -2, -3}, 3, 2, 5, 1, -1, -5});
@@ -160,13 +163,13 @@ String dmViewJson() {
     for (JsonObject c : CHARS.as<JsonArray>()) { if (!first) out += ','; first = false; out += '"'; out += c["id"].as<const char*>(); out += '"'; }
     out += ']';
   }
-  out += ",\"merchants\":"; serializeJson(S["merchants"], out);
-  out += ",\"items\":"; serializeJson(S["items"], out);
+  out += ",\"merchants\":"; jsonAppend(out, S["merchants"]);
+  out += ",\"items\":"; jsonAppend(out, S["items"]);
   {
     JsonArray l = S["log"].as<JsonArray>();
     size_t from = l.size() > 40 ? l.size() - 40 : 0;
     out += ",\"log\":[";
-    for (size_t i = from; i < l.size(); i++) { if (i > from) out += ','; serializeJson(l[i], out); }
+    for (size_t i = from; i < l.size(); i++) { if (i > from) out += ','; jsonAppend(out, l[i]); }
     out += ']';
   }
   {   // players without their tokens
@@ -178,7 +181,7 @@ String dmViewJson() {
       o["id"] = p["id"].as<const char*>(); o["name"] = p["name"].as<const char*>(); o["charId"] = p["charId"].as<const char*>();
       o["gold"] = p["gold"].as<double>(); o["advantage"] = p["advantage"].as<bool>();
       o["inventory"].set(p["inventory"]);
-      serializeJson(d, out);
+      jsonAppend(out, d);
     }
     out += ']';
   }
@@ -198,7 +201,7 @@ String dmViewJson() {
       if (h.size()) o["last"].set(h[h.size() - 1]); else o["last"] = nullptr;
       if (!it.isNull()) o["item"] = it["name"].as<const char*>();
     }
-    out += ",\"negs\":"; serializeJson(d, out);
+    out += ",\"negs\":"; jsonAppend(out, d);
   }
   out += '}';
   return out;

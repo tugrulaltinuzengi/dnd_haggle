@@ -113,6 +113,8 @@ test('snapshots: exact key sets for player and DM views', T, async () => {
 test('SSE: bad token 401, dmOnline flips, a second event follows an action', T, async () => {
   const dmT = await c.reset();
   const p = await c.join('Ali');
+  // Over the Cloudflare relay a closed stream lingers for up to ~40 s (streams are renewed every 30 s and the DM gets a short grace); wait for a DM stream left by the previous test to clear.
+  for (let i = 0; i < 40 && (await c.view(p)).dmOnline; i++) await new Promise((r) => setTimeout(r, 1000));
   const bad = await c.sse('nope');
   assert.equal(bad.status, 401);
   assert.deepEqual(bad.body, { error: 'Login required' });

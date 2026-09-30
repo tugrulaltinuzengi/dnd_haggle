@@ -52,7 +52,7 @@ test('POST body is chunked to the ESP and reassembled byte for byte', async () =
   const res = await relay.handlePublic(req('/api/media?kind=item&id=x', { method: 'POST', body: payload, headers: { 'content-type': 'image/png' } }), 'ip');
   assert.equal(await res.text(), 'ok');
   assert.ok(got.equals(payload));
-  assert.equal(frames.filter((f) => f.t === 'body').length, 3); // 2048 + 2048 + 904
+  assert.equal(frames.filter((f) => f.t === 'body').length, 5); // 1024 x 4 + 904
   assert.equal(frames[0].len, 5000);
 });
 
@@ -93,12 +93,16 @@ test('SSE: events stream through, and a client that leaves aborts the ESP side',
   assert.equal(relay.pending.size, 0);
 });
 
-test('SSE capacity: the fourth stream is refused, other requests still pass', async () => {
+test('SSE capacity: past the limit the oldest stream is ended to make room, ordinary requests still pass', async () => {
   const { relay } = makeRig((f, b, r) => { if (f.path.startsWith('/api/events')) { r.open(200, { 'content-type': 'text/event-stream' }); r.chunk(':\n\n'); } else ping(f, b, r); });
-  for (let i = 0; i < 3; i++) assert.equal((await relay.handlePublic(req('/api/events?token=t' + i), 'ip' + i)).status, 200);
+  relay.maxSse = 3;
+  const streams = [];
+  for (let i = 0; i < 3; i++) { const r = await relay.handlePublic(req('/api/events?token=t' + i), 'ip' + i); assert.equal(r.status, 200); streams.push(r); }
   const fourth = await relay.handlePublic(req('/api/events?token=t3'), 'ip3');
-  assert.equal(fourth.status, 503);
-  assert.deepEqual(await fourth.json(), { error: 'Busy, try again' });
+  assert.equal(fourth.status, 200);
+  assert.equal(relay.inflight().sse, 3);
+  const first = await streams[0].body.getReader().read();   // the oldest was closed after its first chunk
+  assert.ok(first.value || first.done);
   assert.equal((await relay.handlePublic(req('/api/ping'), 'ip9')).status, 200);
 });
 

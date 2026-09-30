@@ -161,11 +161,19 @@ async function saveEditor(closeAfter = true) {
   return r.id;
 }
 
+let apk = false;
 async function loadAddr() {
   try { const r = await fetch('/api/address', { headers: { 'x-token': auth.token } }); addr = await r.json(); render(); } catch {}
+  // The ESP hosts the Android app at /pazar.apk. Unknown paths answer with the app page there, so check the content type, not just the status.
+  try { const h = await fetch('/pazar.apk', { method: 'HEAD' }); apk = h.ok && /android\.package-archive/.test(h.headers.get('content-type') || ''); render(); } catch {}
 }
 function lockedSlot(i) {
   return `<button class="shelfitem" disabled><span class="art"><span class="artlabel">Locked</span><span class="artname">Affinity: ${esc(i.needName)}</span></span><span class="pr" style="opacity:.45">—</span></button>`;
+}
+function apkCard() {
+  if (!apk) return '';
+  const url = location.origin + '/pazar.apk';
+  return `<h2>Android app</h2><div class="card" style="text-align:left"><small>Players install this once (allow "install unknown apps"). It opens the table over the internet, or over the Pazar Wi-Fi at the table.</small>${(() => { try { return `<div class="qr">${QR.svg(url, { ecl: 'M' })}</div>`; } catch { return ''; } })()}<div class="price" style="white-space:normal;word-break:break-all">${esc(url)}</div><div class="tl"><a class="btn sm" href="/pazar.apk" download="pazar.apk">Download</a></div></div>`;
 }
 function addrCard() {
   return `<h2>Invite address</h2><div class="card" style="text-align:left">${addr && addr.url
@@ -395,7 +403,7 @@ function renderDM() {
         ${S.items.filter((i) => i.merchantId === m.id).map((i) => `<div class="row" style="padding:4px 0"><span class="grow">${i.image ? `<span class="mini" style="background-image:url('${esc(i.thumb || i.image)}')"></span>` : ''}${esc(i.name)}${i.magical ? ' <span class="tag mg">magical</span>' : ''}${i.minAffinity ? ` <span class="tag">affinity ${i.minAffinity}+</span>` : ''}${i.stock !== null ? ` <small>(${i.stock})</small>` : ''}</span><span class="price">${fmt(i.price)}</span><button class="btn sm ghost" data-img="item|${i.id}">Image</button>${i.image ? `<button class="btn sm ghost" data-imgdel="item|${i.id}">Remove</button>` : ''}<button class="btn sm ghost" data-editi="${i.id}">Edit</button><button class="btn sm ghost" data-del="item|${i.id}">Delete</button></div>`).join('')}
         <button class="btn sm ghost" data-addi="${m.id}">+ Item</button></div>`).join('');
   } else if (dmTab === 'players') {
-    body = addrCard() + `<h2>Players</h2><div class="list">${S.players.map((p) => `
+    body = addrCard() + apkCard() + `<h2>Players</h2><div class="list">${S.players.map((p) => `
       <div class="card" style="text-align:left"><div class="row"><span class="pico" style="width:40px;height:40px">${esc(initial(p.name))}</span><span class="grow"><b style="margin:0">${esc(p.name)}</b><small>${esc((chr(p.charId) || {}).name || '')} · ${p.inventory.length} items</small></span><span class="price"><i class="coin"></i>${fmt(p.gold)}</span></div>
         ${S.merchants.map((m) => { const a = S.affinity.find((x) => x.playerId === p.id && x.merchantId === m.id); return a ? `<div class="row affrow"><span class="grow">${esc(m.name)}</span>${affbar(a, { sm: true, label: false })}<button class="btn sm ghost" data-aff="${p.id}|${m.id}|-5">−5</button><button class="btn sm ghost" data-aff="${p.id}|${m.id}|5">+5</button></div>` : ''; }).join('')}
         <div class="tl"><button class="btn sm ghost" data-gold="${p.id}|-10">−10</button><button class="btn sm ghost" data-gold="${p.id}|10">+10</button><button class="btn sm ghost" data-gold="${p.id}|100">+100</button><button class="btn sm ghost" data-goldset="${p.id}">Set</button></div>
