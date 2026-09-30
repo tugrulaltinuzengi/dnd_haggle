@@ -94,6 +94,12 @@ curl -i -X DELETE $URL/api/ping
 2. The output of the four checks above.
 3. Confirmation that \`RELAY_KEY\` exists as a **secret** (not a plain variable) and that the Durable Object is SQLite-backed.
 4. Any warning about plan limits. I expect a WebSocket to stay open all day, which the free plan allows because the object hibernates while idle.
+
+## Status: it is already deployed, one question remains
+
+I deployed this myself with Wrangler as \`https://pazar-relay.tugrulaltinuzengi.workers.dev\` (SQLite-backed Durable Object \`Hub\`, secret \`RELAY_KEY\` set). The ESP32 connects over TLS and the whole app test suite (25 tests) passes through it. So the deployment tasks above are done; please only check the settings, and answer this:
+
+**Client disconnects are not propagated to the Durable Object.** For \`text/event-stream\` responses, the stateless Worker returns \`stub.fetch(request)\` untouched. When a viewer (curl, Node fetch, a browser) disconnects, neither the \`cancel()\` of the \`ReadableStream\` I return from the Durable Object nor \`request.signal\` "abort" ever fires there (I logged both for a minute). \`wrangler tail\` shows the request in the stateless Worker as \`canceled\`, but nothing arrives in the object. I worked around it by ending each stream after 30 s from the ESP32 side, so the browser's EventSource reconnects. Is there a supported way to learn, inside a Durable Object, that the client of a streaming \`fetch\` response left (compatibility flags, returning the body differently, piping through a \`TransformStream\`, WebSocket instead of SSE)? Note that piping through a \`TransformStream\` with \`ctx.waitUntil(res.body.pipeTo(writable))\` in the stateless Worker did not help either.
 `;
 fs.writeFileSync(path.join(root, 'CLOUDFLARE-AI.md'), md);
 console.log('wrote dist/worker.bundle.js (' + bundle.length + ' bytes) and CLOUDFLARE-AI.md');

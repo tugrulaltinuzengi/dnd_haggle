@@ -8,7 +8,7 @@
 
 const FWD_REQ_HEADERS = ['x-token', 'x-now', 'content-type'];
 const FWD_RES_HEADERS = ['content-type', 'cache-control', 'content-disposition', 'content-length', 'etag', 'x-content-type-options'];
-const BODY_CHUNK = 2048;
+const BODY_CHUNK = 1024;   // the ESP decodes each frame into a small buffer
 const MAX_BODY = 140000;
 
 const enc = new TextEncoder();
@@ -18,14 +18,21 @@ const json = (status, obj) => new Response(JSON.stringify(obj), { status, header
 
 class Relay {
   // send(text) -> boolean (false when the ESP is not connected); isOnline() -> boolean
-  constructor({ send, isOnline, timeoutMs = 15000, maxInflight = 6, maxSse = 3, rate = { windowMs: 10000, max: 80 }, now = Date.now }) {
+  constructor({ send, isOnline, timeoutMs = 15000, maxInflight = 6, maxSse = 12, rate = { windowMs: 10000, max: 80 }, now = Date.now }) {
     Object.assign(this, { send, isOnline, timeoutMs, maxInflight, maxSse, rate, now });
     this.pending = new Map();
     this.seq = 0;
     this.hits = new Map(); // ip -> { start, n }
   }
 
-  inflight() { let sse = 0; for (const p of this.pending.values()) if (p.sse) sse++; return { total: this.pending.size, sse }; }
+  // total = ordinary requests (short-lived); sse = open event streams, counted apart so players' streams never starve normal requests
+  inflight() { let sse = 0, total = 0; for (const p of this.pending.values()) { if (p.sse) sse++; else total++; } return { total, sse }; }
+
+  // Cloudflare can take several seconds to tell us a viewer left, so a full house usually holds ghosts: make room by ending the oldest open stream.
+  evictOldestSse() {
+    for (const [id, p] of this.pending) if (p.sse && p.opened) { this.drop(id, true); return true; }
+    return false;
+  }
 
   limited(ip) {
     const t = this.now(), h = this.hits.get(ip);
@@ -42,14 +49,15 @@ class Relay {
 
     const sse = url.pathname === '/api/events';
     const load = this.inflight();
-    if (load.total >= this.maxInflight || (sse && load.sse >= this.maxSse)) return json(503, { error: 'Busy, try again' });
+    if (!sse && load.total >= this.maxInflight) return json(503, { error: 'Busy, try again' });
+    if (sse && load.sse >= this.maxSse && !this.evictOldestSse()) return json(503, { error: 'Busy, try again' });
 
     let body = null;
     if (request.method === 'POST') {
       const cl = +request.headers.get('content-length');
-      if (Number.isFinite(cl) && cl > MAX_BODY) return json(413, { error: 'Too large' });
+      if (Number.isFinite(cl) && cl > MAX_BODY) return json(413, { error: 'File too large' });
       body = new Uint8Array(await request.arrayBuffer());
-      if (body.length > MAX_BODY) return json(413, { error: 'Too large' });
+      if (body.length > MAX_BODY) return json(413, { error: 'File too large' });
     }
 
     const id = String(++this.seq);

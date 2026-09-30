@@ -63,7 +63,7 @@ Create a Worker called `pazar-relay`, replace its code with the single file belo
 
 const FWD_REQ_HEADERS = ['x-token', 'x-now', 'content-type'];
 const FWD_RES_HEADERS = ['content-type', 'cache-control', 'content-disposition', 'content-length', 'etag', 'x-content-type-options'];
-const BODY_CHUNK = 2048;
+const BODY_CHUNK = 1024;   // the ESP decodes each frame into a small buffer
 const MAX_BODY = 140000;
 
 const enc = new TextEncoder();
@@ -73,14 +73,21 @@ const json = (status, obj) => new Response(JSON.stringify(obj), { status, header
 
 class Relay {
   // send(text) -> boolean (false when the ESP is not connected); isOnline() -> boolean
-  constructor({ send, isOnline, timeoutMs = 15000, maxInflight = 6, maxSse = 3, rate = { windowMs: 10000, max: 80 }, now = Date.now }) {
+  constructor({ send, isOnline, timeoutMs = 15000, maxInflight = 6, maxSse = 12, rate = { windowMs: 10000, max: 80 }, now = Date.now }) {
     Object.assign(this, { send, isOnline, timeoutMs, maxInflight, maxSse, rate, now });
     this.pending = new Map();
     this.seq = 0;
     this.hits = new Map(); // ip -> { start, n }
   }
 
-  inflight() { let sse = 0; for (const p of this.pending.values()) if (p.sse) sse++; return { total: this.pending.size, sse }; }
+  // total = ordinary requests (short-lived); sse = open event streams, counted apart so players' streams never starve normal requests
+  inflight() { let sse = 0, total = 0; for (const p of this.pending.values()) { if (p.sse) sse++; else total++; } return { total, sse }; }
+
+  // Cloudflare can take several seconds to tell us a viewer left, so a full house usually holds ghosts: make room by ending the oldest open stream.
+  evictOldestSse() {
+    for (const [id, p] of this.pending) if (p.sse && p.opened) { this.drop(id, true); return true; }
+    return false;
+  }
 
   limited(ip) {
     const t = this.now(), h = this.hits.get(ip);
@@ -97,14 +104,15 @@ class Relay {
 
     const sse = url.pathname === '/api/events';
     const load = this.inflight();
-    if (load.total >= this.maxInflight || (sse && load.sse >= this.maxSse)) return json(503, { error: 'Busy, try again' });
+    if (!sse && load.total >= this.maxInflight) return json(503, { error: 'Busy, try again' });
+    if (sse && load.sse >= this.maxSse && !this.evictOldestSse()) return json(503, { error: 'Busy, try again' });
 
     let body = null;
     if (request.method === 'POST') {
       const cl = +request.headers.get('content-length');
-      if (Number.isFinite(cl) && cl > MAX_BODY) return json(413, { error: 'Too large' });
+      if (Number.isFinite(cl) && cl > MAX_BODY) return json(413, { error: 'File too large' });
       body = new Uint8Array(await request.arrayBuffer());
-      if (body.length > MAX_BODY) return json(413, { error: 'Too large' });
+      if (body.length > MAX_BODY) return json(413, { error: 'File too large' });
     }
 
     const id = String(++this.seq);
@@ -256,3 +264,9 @@ curl -i -X DELETE $URL/api/ping
 2. The output of the four checks above.
 3. Confirmation that `RELAY_KEY` exists as a **secret** (not a plain variable) and that the Durable Object is SQLite-backed.
 4. Any warning about plan limits. I expect a WebSocket to stay open all day, which the free plan allows because the object hibernates while idle.
+
+## Status: it is already deployed, one question remains
+
+I deployed this myself with Wrangler as `https://pazar-relay.tugrulaltinuzengi.workers.dev` (SQLite-backed Durable Object `Hub`, secret `RELAY_KEY` set). The ESP32 connects over TLS and the whole app test suite (25 tests) passes through it. So the deployment tasks above are done; please only check the settings, and answer this:
+
+**Client disconnects are not propagated to the Durable Object.** For `text/event-stream` responses, the stateless Worker returns `stub.fetch(request)` untouched. When a viewer (curl, Node fetch, a browser) disconnects, neither the `cancel()` of the `ReadableStream` I return from the Durable Object nor `request.signal` "abort" ever fires there (I logged both for a minute). `wrangler tail` shows the request in the stateless Worker as `canceled`, but nothing arrives in the object. I worked around it by ending each stream after 30 s from the ESP32 side, so the browser's EventSource reconnects. Is there a supported way to learn, inside a Durable Object, that the client of a streaming `fetch` response left (compatibility flags, returning the body differently, piping through a `TransformStream`, WebSocket instead of SSE)? Note that piping through a `TransformStream` with `ctx.waitUntil(res.body.pipeTo(writable))` in the stateless Worker did not help either.
