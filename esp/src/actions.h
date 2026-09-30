@@ -1,7 +1,7 @@
 #pragma once
 #include "auth.h"
 
-// Ports of server.js P (player) and D (dm) tables. They throw HttpError / std::runtime_error (engine) on invalid input.
+// Ports of server.js P (player) and D (dm) tables. They throw HttpError on invalid input.
 // `out` receives extra fields for the {ok:true, ...out} reply (e.g. {id}).
 void runPlayer(const String& name, JsonObject p, JsonObject b);
 void runDm(const String& name, JsonObject b, const Auth& a, JsonObject out);
@@ -13,5 +13,3 @@ void sseCloseDmExcept(const String& keepToken);
 String mediaCopy(const char* rel, const String& nid, bool thumb);   // returns "" if nothing copied
 void mediaUnlink(const char* rel);
 
-// test hooks (dev builds)
-void diceSet(const int* seq, size_t n);

@@ -1,5 +1,5 @@
 #pragma once
-#define PAZAR_VERSION "0.13.0"
+#define PAZAR_VERSION "0.14.0"
 #define AP_SSID "Pazar"
 #define MAX_SSE 9
 #define MAX_PLAYERS 8

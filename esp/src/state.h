@@ -6,8 +6,8 @@
 #include <freertos/semphr.h>
 #include "util.h"
 
-extern JsonDocument S;        // day, week, offers, merchants, items, players, negs, bans, revealed, insightTries, dm, log, ledger, affinity, affinityWeek, settings
-extern JsonDocument CHARS;    // /www/chars.json (character sheet bonuses)
+extern JsonDocument S;        // day, week, offers, merchants, items, players, bans, dm, log, ledger, settings
+extern JsonDocument CHARS;    // /www/chars.json (character presets: name, starting gold)
 
 // One recursive mutex guards S and everything derived from it.
 struct Lock { Lock(); ~Lock(); };
@@ -28,18 +28,5 @@ JsonObject merchantOf(const char* id);
 JsonObject itemOf(const char* id);
 JsonObject playerOf(const char* id);
 JsonObject charOf(const char* id);          // null object if unknown
-String nkey(const char* pid, const char* iid);
 String bkey(const char* pid, const char* mid);
-bool isBanned(const char* pid, const char* mid);
-
-// ---- affinity ----
-struct AffCfg {
-  bool enabled; int start, weeklyCap; int thresholds[4]; int dcMod[5]; int bonusRepFrom;
-  int gainBuy, gainOffer, gainDeal, gainRet, gainAngered;
-};
-extern const char* const LEVEL_NAMES[5];
-AffCfg affCfg();
-int affOf(const char* pid, const char* mid);
-int affLevel(const AffCfg& c, int v);
-int levelFrom(const AffCfg& c, int level);  // lower bound of a level
-void affChange(JsonObject p, const char* mid, int delta, const char* why);
+bool isClosed(const char* pid, const char* mid);   // the DM closed this merchant to this player for today

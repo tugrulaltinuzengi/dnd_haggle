@@ -5,9 +5,23 @@ Cross-app status and compatibility: `docs/superpowers/plans/2026-09-29-table-syn
 History before 0.12.3: `PROJE.md` §12.
 
 ## [Unreleased]
+
+## [0.14.0] - 2026-09-30
+Haggling moves to the table: players haggle with the DM in person and the app records the result. **Breaking** for the API and saved worlds (old saves are migrated on load).
+### Changed
+- **Offers settle the moment they are accepted.** A player offer (`bid`) accepted by the DM, or a DM counter accepted by the player, moves gold, the item, stock and the ledger at once. Not enough gold or no stock refuses the accept and keeps the offer open. The Weekly Market no longer delivers anything; `dm/weekly` just starts a new week (and day).
+- Player offers only need to be below the list price (the 25 % floor went with the engine); DM counters may be any price.
+- Player item page: **Make offer** (price + note) and **Buy at list price**, with the merchant's counter shown right there. DM Live tab: offers waiting for an answer.
+- Leftover Turkish messages on the ESP32 are English now (`At capacity, try again`, `Media storage is full`, `(copy)`).
 ### Added
+- `dm/close {playerId, merchantId, closed}`: the DM closes a merchant to one player for the day (reopens on New Day or by hand). Views: player `merchants[].closed`, DM `closed[]`.
+- Items have `hidden`: hidden items are invisible to players and cannot be bought or bid on.
+- Node refuses a 9th player like the ESP32 (`The table is full (at most 8 players).`).
+- `app/test/migrate.test.js`: a pre-0.14 save loads cleanly.
 - **Relay watchdog (ESP32):** a text ping every 20 s that the Worker answers; a link that stays silent or never stays up for 30 s is dialed again, and after 4 failed attempts the board reboots.
 - `esp/tools/sse-load.mjs`: 9 event streams with heap sampling, over the LAN or through the relay.
+### Removed
+- The dice haggle (`offer`), `insight`, advantage, merchant types, mood/patience, affinity and its settings (`dm/affinity`, `dm/affsettings`), `dm/line`, `dm/setprice`, `dm/dice`, character skill bonuses, the rules engine and its 688 conformance vectors (`app/engine.js`, `esp/lib/engine`, `pio test -e native`).
 
 ## [0.13.0] - 2026-09-30
 ### Added

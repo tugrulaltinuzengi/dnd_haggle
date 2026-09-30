@@ -174,7 +174,7 @@ static void handleAction(AsyncWebServerRequest* r, const String& name, const uin
         if (S["players"].size() >= MAX_PLAYERS) fail("The table is full (at most 8 players).");
         p = S["players"].as<JsonArray>().add<JsonObject>();
         p["id"] = newId(); p["token"] = newToken(); p["name"] = nm; p["charId"] = ch["id"].as<const char*>();
-        p["gold"] = ch["gold"].as<double>(); p["advantage"] = false; p["inventory"].to<JsonArray>();
+        p["gold"] = ch["gold"].as<double>(); p["inventory"].to<JsonArray>();
         logLine(nm + " entered the market (" + ch["name"].as<const char*>() + ")", p["id"]);
       }
       changed();
@@ -217,9 +217,7 @@ static void handleAction(AsyncWebServerRequest* r, const String& name, const uin
   } catch (const HttpError& e) {
     sendErr(r, e.code, e.what());
   } catch (const std::runtime_error& e) {
-    String m = e.what();
-    if (m.startsWith("Offer") || m.startsWith("This negotiation") || m.startsWith("Unknown")) sendErr(r, 400, e.what());
-    else { Serial.printf("500: %s\n", e.what()); sendErr(r, 500, "Server error"); }
+    { Serial.printf("500: %s\n", e.what()); sendErr(r, 500, "Server error"); }
   }
 }
 
@@ -303,7 +301,7 @@ static void handleBody(AsyncWebServerRequest* r, uint8_t* data, size_t len, size
       sendErr(r, 413, "Too large"); return;
     }
     Body* b = (Body*)calloc(1, sizeof(Body) + keep + 1);
-    if (!b) { sendErr(r, 503, "Kapasite dolu"); return; }
+    if (!b) { sendErr(r, 503, "At capacity, try again"); return; }
     r->_tempObject = b;
     if (isMedia) {
       try {

@@ -11,7 +11,9 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 
 ## 1. Durum
 
-**Şu anki sürüm: 0.12.2.** Ayrıntı Bölüm 12.
+**Şu anki sürüm: 0.14.0.** 0.12.3 ve sonrası `CHANGELOG.md`'de, öncesi Bölüm 12'de.
+
+**0.14.0 ile pazarlık masada, gerçek hayatta yapılır:** zar, Pazar/Rep barı, satıcı tipleri, Sez, avantaj ve Yakınlık kaldırıldı (Bölüm 3). Aşağıdaki eski notlarda bunlardan söz edilen yerler tarihî kayıttır.
 
 **Çalışan:** kural motoru, canlı sunucu (DM + oyuncular, SSE), 6 karakter, pazarlık (zar, **Pazar** barı, Hard Gamble, Sez), **Yakınlık** sistemi (ayrı uzun vadeli bar, **tüm değerleri DM ayarlar**), teklifler (CRM hattı) ve Haftalık Pazar, alışveriş defteri (filtre + CSV), karanlık tema, masaüstü düzeni, Tailscale araçları, **davet adresi QR kodu**, PIN hız sınırı, yedek ve başlatma betikleri, medya katmanı, **DM eşya editörü** (açıklama, tür, nadirlik, görsel, varyant), Android WebView kabuğu. 50 birim/API/araç testi ve 6 senaryolu tarayıcı testi geçiyor. Kod: [app/](app/), [android/](android/).
 
@@ -37,10 +39,8 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 
 | # | Karar | Durum |
 |---|---|---|
-| — | Başarısızlık formülü `f = X − a·u/2`, DC 12/15/18, Rep 4/3/2 | ✅ |
-| — | Y < X/4 zarsız ret, Rep −1. Önceki tekliften düşük Y Rep −1. Aynı ya da yüksek Y serbest | ✅ |
-| — | Rep 0: 1,1×X, satıcı o gün o oyuncuyla hiçbir alışverişte pazarlık yapmaz | ✅ |
-| — | Hard Gamble her an (büyülüde yasak), f = 0,5×X, eşya kusurlu ve satılamaz | ✅ |
+| K24 | **Pazarlık gerçek hayatta** (DM kararı, 2026-09-30): oyuncu teklifini uygulamaya yazar, DM (tüccarı oynar) kabul / karşı teklif / ret der, kabulde alışveriş anında olur. Zar motoru, Rep, satıcı tipi, Sez, avantaj, Hard Gamble ve Yakınlık kaldırıldı (0.14.0) | ✅ |
+| — | ~~Başarısızlık formülü, DC, Rep, Rep 0, Hard Gamble~~ | kaldırıldı (0.13–0.14) |
 | K1 | Sunucu **hep-açık bir cihazda**, DM'in PC'sinde değil (DM kararı). Hedef cihaz **ESP32 + MicroLink (Tailscale)**, spike'larla kanıtlanacak. Node sunucusu referans olarak kalır, Raspberry Pi/PC'de de çalışır. Erişim Tailscale, PC ve mobil. Pi/PC'de `tailscale serve` ile HTTPS | ✅ (ESP ⏳ kanıt) |
 | K2 | Depolama yerel disk: `app/media/`, `app/data/`. Bulut gerekmez | ✅ |
 | K3–K4 | Portre ve eşya stili gerçekçi fantazi | ✅ |
@@ -55,14 +55,14 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 | K13 | Oyuncu tezgâhı kuralları **DM'in ayarıdır**: pazar ücreti varsayılan %5 ama DM 0 yapıp hiç almayabilir, büyülü eşya, onay ve fiyat sınırı da DM ayarı | ✅ |
 | K14 | Altın ve çantanın esas kaynağı (dış uygulama mı, Pazar mı, eşitleme mi) | ⏸ ertelendi |
 | K15 | Ekonomi (Bölüm 6) **isteğe bağlı modül**: DM açar/kapatır, varsayılan kapalı, alt özellikler tek tek. DM **"evet"** dedi: modül açıldığında önerilen varsayılanlar (5e yaşam tarzı giderleri, endekslerin oyunculara açık olması, silah/zırh aşınması) devrede olur. Parametreler modül açılırken ayarlanır | ✅ |
-| K16 | **İki ayrı bar.** Pazarlıkta **Pazar** barı (anlık sabır, oran olarak gösterilir) ve satıcı başına uzun vadeli **Yakınlık** barı. DC ve satıcı tipi gizli kalır | ✅ |
+| K16 | ~~**İki ayrı bar.**~~ (0.14.0'da kaldırıldı) Pazarlıkta **Pazar** barı (anlık sabır, oran olarak gösterilir) ve satıcı başına uzun vadeli **Yakınlık** barı. DC ve satıcı tipi gizli kalır | ✅ |
 | K17 | Uygulama **hem PC hem mobilden** kullanılır: telefonda APK/tarayıcı, PC'de tarayıcı (masaüstü düzeni V1b) | ✅ |
 | K18 | Sunucu donanımı: **ESP32-S3 (PSRAM ≥ 8 MB, flash ≥ 16 MB, microSD)** DM'in tercihi, model ⬜. Yedek yol Raspberry Pi Zero 2 W (Node değişmeden) | ✅ (model ⬜) |
 | K20 | **ESP32 hedefi:** önce kanıt (Spike 1: tailnet içinden TCP/HTTP, Spike 2: bellek, LittleFS, SD), sonra C++ port; uyumluluk vektörleri ve aynı HTTP testleriyle doğrulanır. Kanıt başarısızsa Raspberry Pi'ye dönülür | ⏳ |
 | K21 | Medya: tarayıcıda kırp + yeniden boyutlandır + yeniden kodla (canvas), sunucu sihirli baytla doğrular (yalnız PNG/JPEG), sınırlar: eşya 700 KB, küçük resim 60 KB, portre 400 KB, 32–2048 px. Sunucu görüntü işlemez (ESP'ye taşınabilir) | ✅ |
 | K22 | **Kapasite hedefi:** 4 mobil (sürekli) + 2 PC, aynı anda 6 oyuncu + DM = 7 bağlantı (8'e kadar testli). ESP için de geçerli | ✅ |
 | K23 | **QR kodu** davet adresi için (DM "evet" dedi): bağımlılıksız üretici, gerçek okuyucuyla testli | ✅ |
-| K19 | **Yakınlık** (Bölüm 3): oyuncu × satıcı, 0–100, 5 seviye, kazanç/kayıp ve haftalık tavan, DC indirimi, başlangıç sabır bonusu, kilitli eşya. **Tüm değerler DM'in ayarıdır** (Ayar sekmesi), sistem tümden kapatılabilir, varsayılana dönülebilir. Sayılar başlangıç önerisi | ✅ |
+| K19 | ~~**Yakınlık**~~ (0.14.0'da kaldırıldı; yerine DM'in elle kapatma/gizleme kontrolleri): oyuncu × satıcı, 0–100, 5 seviye, kazanç/kayıp ve haftalık tavan, DC indirimi, başlangıç sabır bonusu, kilitli eşya. **Tüm değerler DM'in ayarıdır** (Ayar sekmesi), sistem tümden kapatılabilir, varsayılana dönülebilir. Sayılar başlangıç önerisi | ✅ |
 
 **İçerik ve lisans:** ticari değil, kendi masamız. **The Crooked Moon lisanslı** (sahibiz), DM'in kendi kopyasından içe aktarılır. 5e.tools verisi DM'in yerel kopyasından okunur, site taranmaz. **Google Görseller kazınmaz** (Google'ın şartlarına aykırı, kırılgan, sonuçlar tutarsız). Google'ın resmî görsel arama API'si 2025'ten beri yeni müşterilere kapalı, 1 Ocak 2027'de kapanıyor ([Google](https://developers.google.com/custom-search/v1/overview)). WotC 2024'te 5etools deposuna DMCA talebi gönderdi ([haber](https://tildes.net/~games.tabletop/1i39/5etools_repository_taken_down_after_dmca_request_by_wizards_of_the_coast)). **Depo herkese açık: telifli görsel, kitap metni ve 5e.tools verisi depoya girmez** (`app/media/`, `app/data/` `.gitignore`'da; `git ls-files` denetimi testte olacak). Hukuki tavsiye değildir.
 
@@ -70,65 +70,18 @@ Eski dosyalar (DM_PAKETI, REFERANS_KARTI, OYUN_TESTI, DM_AGENT, TEST_KAYDI, PLAN
 
 ## 3. Oyun kuralları
 
-### Değişkenler
-| Sembol | Anlam |
-|---|---|
-| X | Satıcının (güncel) fiyatı |
-| Y | Oyuncunun teklifi, X/4 ≤ Y < X |
-| G = X − Y, a = G/2 | Pazarlık payı ve yarısı |
-| u | Satıcı tutumu: 0,5 cömert, 1 nötr, 1,5 açgözlü (gizli) |
-| Rep | Satıcının sabrı (gizli sayı, oran çubukta görünür) |
+**Pazarlık masada, yüz yüze yapılır** (0.14.0). Uygulama sonucu kaydeder; zar ya da gizli sayı yoktur.
 
-| | Cömert | Nötr | Açgözlü |
-|---|---|---|---|
-| u | 0,5 | 1,0 | 1,5 |
-| DC | 12 | 15 | 18 |
-| Kritik eşiği (DC+5) | 17 | 20 | 23 |
-| Başlangıç Rep | 4 | 3 | 2 |
+1. Oyuncu eşyayı seçer, DM (tüccarı oynayarak) ile masada pazarlık eder.
+2. Oyuncu vardıkları fiyatı ya da en iyi teklifini uygulamaya yazar (not ekleyebilir). Katalog eşyasında teklif **etiket fiyatının altında** olmalıdır; katalogda olmayan bir şey için **özel istek** de bırakılabilir. Oyuncunun en çok 10 açık teklifi olur.
+3. DM teklifi **kabul eder**, **karşı teklif** verir (fiyatı serbest, yükseltebilir de) ya da **reddeder**. Karşı teklifi oyuncu kabul eder, yeni teklifle karşılık verir ya da geri çeker. DM kendisi de oyuncuya teklif gönderebilir.
+4. **Kabul edildiği anda** alışveriş olur: altın düşer, eşya çantaya girer, stok azalır, deftere yazılır. Altın yetmezse ya da stok bittiyse kabul reddedilir ve teklif açık kalır.
+5. Pazarlık istemeyen oyuncu **etiket fiyatına** doğrudan alır.
 
-u için zar (tanışınca): d6, 1–2 cömert, 3–4 nötr, 5–6 açgözlü. Önemli tüccarı DM seçer. Sez (Insight) DC 15, satıcının **tipini** söyler (sayıyı değil), günde bir deneme.
-
-### Tur
-1. Oyuncu teklif eder (Y). Y < X/4: zarsız ret, Rep −1. Önceki teklifin altında Y: Rep −1, zar yine atılır.
-2. **d20 + bonus** (İkna, Blöf ya da Gözdağı bonusu). Avantaj: ortak dil, önceki iyilik, ölçülü rüşvet (en fazla bir tane), iki zarın yükseği sayılır.
-3. Sonuç:
-
-| Sonuç | Koşul | Fiyat f | Rep |
-|---|---|---|---|
-| Kritik | doğal 20 ya da ≥ DC+5 | Y | — |
-| Başarı | ≥ DC | Y + a·u/2 | — |
-| Başarısız | < DC | X − a·u/2 | −1 (Blöf ve Gözdağı −2) |
-
-Başarıda fiyat sabitlenir (kabul ya da vazgeç). Başarısızlıktan sonra aynı ya da yüksek Y ile tekrar denenebilir.
-
-**Rep 0:** pazarlık biter, f = 1,1×X. Satıcı o gün o oyuncuyla **hiçbir alışverişte** pazarlık yapmaz (etiket fiyatı geçerli), Yeni Gün'de sıfırlanır. Hard Gamble açıktır.
-
-**Hard Gamble (her an):** f = 0,5×X (pazarlıkta ulaşılan fiyat sayılmaz). Eşya **kusurlu**: satılamaz (0 gp), yalnızca kullanılır / parçalanır / yok edilir. Silah doğal 1'de kırılır, zırh −1 AC, alet ve araçta dezavantaj yok. **Büyülü eşyada yasak.**
-
-**Diğer:** Deception yakalanırsa (başarısızlık) ve Intimidation başarısızlığında Rep −2. Fiyatlar en yakın cp'ye yuvarlanır. Kitap fiyatı DM ±%20 oynatabilir.
-
-### Yakınlık (uzun vadeli, satıcı başına, DM'in ayarı)
-Pazar barı (Rep) tek pazarlıktır. **Yakınlık** oyuncunun bir satıcıyla uzun vadeli ilişkisidir: oyuncu × satıcı, 0–100, kalıcıdır (Yeni Gün ve Haftalık Pazar'da sıfırlanmaz). **Aşağıdaki sayıların hepsi varsayılandır: DM "Ayar" sekmesinden hepsini değiştirir, sistemi kapatır ya da varsayılana döner.**
-| Seviye | Eşik (varsayılan) | Zar eşiği (DC) | Diğer |
-|---|---|---|---|
-| Yabancı | 0 | 0 | |
-| Tanıdık | 20 | 0 | |
-| Müşteri | 40 | −1 | |
-| Dost | 60 | −2 | pazarlığa **+1 sabırla** başlar |
-| Sırdaş | 80 | −3 | + Dost'un bonusu |
-DC indirimi kritik eşiğini de kaydırır ve **oyuncuya gösterilmez**. **Varsayılan kazanç/kayıp:** alışveriş +2, teklif teslimi +5, anlaşma (kritik/başarı) +1, Hard Gamble −2, hakaret gibi teklif −1, satıcı sinirlenirse −5. Kazançlar oyuncu × satıcı başına **varsayılan haftada en çok +10** (tekrar tekrar alışveriş yaparak yükseltmeyi engeller), kayıplar sınırsız. Başlangıç değeri varsayılan 20.
-**DM ayarları (Ayar sekmesi):** aç/kapa · başlangıç değeri · haftalık tavan · 4 seviye eşiği (artan olmalı, 1–99) · seviye başına DC indirimi (0 ile −5) · sabır bonusu hangi seviyeden başlar (ya da kapalı) · 6 kazanç/kayıp kalemi (−20 ile +20). Geçersiz değer kaydedilmez, yeni ayar yalnızca yeni olayları etkiler, mevcut değerler ve açık pazarlıklar bozulmaz. **Kapalıyken:** çubuklar gizlenir, DC indirimi ve sabır bonusu uygulanmaz, kilitli eşyalar açılır, kazanç/kayıp durur, değerler saklanır (yeniden açınca kalır). DM ayrıca oyuncu × satıcı değerini ±5 ile ya da doğrudan ayarlar (Kişi sekmesi).
-**Kilitli eşya:** DM eşyaya "gereken yakınlık" koyabilir (editörde). Yakınlığı yetmeyen oyuncu eşyanın **adını ve fiyatını göremez** ("Kilitli · Yakınlık: Dost" görünür), pazarlık, satın alma, Hard Gamble ve teklif reddedilir.
-
-### Örnek (X = 100, Y = 60, a = 20)
-| u | Kritik | Başarı | Başarısız | Rep 0 | Hard Gamble |
-|---|---|---|---|---|---|
-| 0,5 | 60 | 65 | 95 | 110 | 50 |
-| 1,0 | 60 | 70 | 90 | 110 | 50 |
-| 1,5 | 60 | 75 | 85 | 110 | 50 |
+**DM'in elle kontrolleri:** bir satıcıyı bir oyuncuya o gün için **kapatabilir** (Yeni Gün'de açılır, elle de açılır), eşyaları oyunculardan **gizleyebilir** (gizli eşya görünmez, alınamaz, teklif verilemez). Yeni Hafta hafta sayacını ve günü ilerletir, açık teklifler kalır.
 
 ### Karakterler (oyuncu seçer)
-Ozan (İkna +6, Blöf +3, Gözdağı 0, 80 gp) · Hırsız (+2/+6/+2, 60 gp) · Barbar (0/0/+6, 100 gp) · Paladin (+5/0/+3, 90 gp) · Büyücü (+1/+1/+1, 200 gp) · Druid (+4/+1/+1, 70 gp). Sez bonusları: 2, 3, 0, 2, 4, 5.
+Ozan (80 gp) · Hırsız (60) · Barbar (100) · Paladin (90) · Büyücü (200) · Druid (70). Karakter şimdilik yalnızca başlangıç altınını belirler; kendi karakter sayfası 0.16.0'da gelir.
 
 ---
 
@@ -139,23 +92,19 @@ Ozan (İkna +6, Blöf +3, Gözdağı 0, 80 gp) · Hırsız (+2/+6/+2, 60 gp) · 
 cd app
 DM_PIN=1234 node server.js        # http://localhost:3000, bağımlılık yok (Node 18+); ya da ./start.sh, start.bat
 npm install                       # yalnızca test için jsqr (QR'ı gerçek okuyucuyla doğrular), çalışma zamanında bağımlılık yok
-npm test                          # 50 birim/API/araç testi (vektör, depo denetimi, QR dahil)
+npm test                          # birim/API/araç testleri (depo denetimi, QR, eski kayıt taşıma dahil)
+npm run test:http                 # HTTP parite paketi (Node'a ya da BASE=... ile ESP/relay'e karşı)
 npm run e2e                       # tarayıcı testi: 6 senaryo (playwright gerekir)
-npm run vectors                   # kural motoru uyumluluk vektörlerini yeniden üretir (conformance/)
 npm run tailscale                 # Tailscale HTTPS yayını (Bölüm 7). --funnel: herkese açık, --stop: kapat
 npm run backup                    # data/ ve media/ -> backups/pazar-TARIH.tgz
 ```
 DM için giriş ekranında **Ben DM'im** + PIN. Üretimde (`NODE_ENV=production`) `DM_PIN` zorunlu. **PIN hız sınırı:** aynı adresten 5 yanlış denemede 10 dakika kilit (`PIN_LOCK_MS` ile ayarlanır). Durum `app/data/data.json`'da tutulur (eski varsayılan `app/data.json` idi).
 
 ### Nasıl çalışır
-Sunucu her zarı atar (oyuncu sayı görmez). Durum `app/data.json`'da tutulur. Canlı güncelleme SSE ile. Oyuncu kendi adıyla girer (aynı ad aynı oyuncuya bağlanır, masa içi kolaylık, güvenlik değil).
+Durum `app/data/data.json`'da tutulur. Canlı güncelleme SSE ile. Oyuncu kendi adıyla girer (aynı ad aynı oyuncuya bağlanır, masa içi kolaylık, güvenlik değil).
 
-**Oyuncu:** karakter seç → satıcı → raf → eşya → teklif kaydırıcısı ve yaklaşım (İkna/Blöf/Gözdağı) → **Pazarlık Et**. Pazarlık ekranında üstte **iki ayrı bar**: **Pazar** (anlık, Sakin / Huzursuz / Sinirli / Bitti, oran gösterir) ve **Yakınlık** (uzun vadeli, seviye adı ve eşikler). Satıcı listesinde ve portrede de Yakınlık görünür. Sonrasında Satın Al, tekrar dene, Sez, Hard Gamble. Çantada 18 slot ve **harcama kaydı**.
-**DM:** Canlı (pazarlıklar, Pazar barı, hızlı replik, fiyat sabitleme), Teklif (CRM panosu), Pazar (satıcı, eşya editörü, görsel/portre), Kişi (**davet adresi + QR**, altın, avantaj, teklif gönder, satıcı başına yakınlık ±5), Defter (tüm altın hareketleri, oyuncu ve tür süzgeci, toplamlar, CSV indir), **Ayar (Yakınlık ayarları)**, Yeni Gün.
-
-### Teklifler (CRM) ve Haftalık Pazar
-Aşamalar: Yeni (DM bekleniyor) → Karşı teklif (cevap oyuncuda) → Anlaşıldı (Pazar gününde teslim) → Teslim edildi. Kapananlar: Reddedildi, Geri çekildi, Teslim olmadı. Oyuncu teklif bırakır (katalog ya da özel istek), DM kabul / karşı teklif (kural önerisiyle: Y + a·u/2) / reddet, ya da oyuncuya teklif gönderir. Teklifte zar yok. Katalog eşyasında teklif etiketin altında ve en az %25'i, oyuncunun en çok 10 açık teklifi olur.
-**Haftalık Pazar** (DM): anlaşılanları teslim eder (altın düşer, eşya çantaya girer, stok azalır; altın yetmezse ya da eşya tükenmişse "Teslim olmadı"), hafta ve gün ilerler, pazarlıklar ve yasaklar sıfırlanır, cevap bekleyen teklifler kalır.
+**Oyuncu:** karakter seç → satıcı → raf → eşya → **Teklif ver** (fiyat + not) ya da **Etiket fiyatına al**. Satıcının karşı teklifi eşya sayfasında ve Teklifler sekmesinde görünür (Kabul / Karşı teklif / Geri çek). Çantada 18 slot ve **harcama kaydı**.
+**DM:** Canlı (bekleyen teklifler: Kabul / Karşı teklif / Ret, akış), Teklif (tüm teklifler, Yeni Hafta), Pazar (satıcı, eşya editörü, gizle/göster, görsel/portre), Kişi (**davet adresi + QR**, altın, oyuncuya satıcı kapatma, teklif gönder), Defter (tüm altın hareketleri, süzgeç, CSV), Ayar (DM şifresi), Yeni Gün.
 
 ### Medya (yapıldı, 0.11)
 DM Pazar sekmesinde eşyaya **Görsel**, satıcıya **Portre** ekler (telefonda kamera/galeri). **Tarayıcı** görseli ortadan kırpar, yeniden boyutlandırır ve yeniden kodlar (EXIF gider): eşya 512×512 PNG (700 KB'ı aşarsa 384, sonra 256) + 128×128 küçük resim, portre 768×512 JPEG. Sunucu görüntü işlemez, yalnızca **sihirli baytlarla doğrular** (PNG/JPEG, SVG ve diğerleri reddedilir), boyut ve piksel sınırını uygular, dosya adını kendisi üretir ve `?v=` ile önbellek tazeler. `POST /api/media?kind=item|portrait&id=…&variant=main|thumb` (yalnız DM), `GET /media/…` (yol atlatma engelli, `nosniff`, değişmez önbellek), `dm/mediaclear`, eşya/satıcı silinince dosyalar da silinir. Dosyalar `app/media/` altında (`MEDIA_DIR`), depoya girmez. Oyuncu ekranında raf ve pazarlıkta büyük görsel, çantada küçük resim, yoksa yazı kutusu. **Şu an yalnızca DM yükler**, oyuncu tezgâhı gelince (V3b) kendi eşyası için de açılır.

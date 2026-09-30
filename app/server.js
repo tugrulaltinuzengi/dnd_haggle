@@ -316,7 +316,7 @@ const D = {
     log(`DM: ${m.name} is ${b.closed ? 'closed' : 'open again'} to ${p.name} today`, p.id);
   },
   bidreply(b) {
-    const o = offerOf(b.id), it = o.itemId && S.items.find((i) => i.id === o.itemId), note = noteOf(b.note);
+    const o = offerOf(b.id), note = noteOf(b.note);
     if (!OPEN.includes(o.status)) fail('This offer is closed.');
     if (note) o.dmNote = note;
     if (b.action === 'accept') {
@@ -325,7 +325,7 @@ const D = {
     } else if (b.action === 'counter') {
       const price = num(b.price, 0.01);
       o.price = price; o.by = 'dm'; o.status = 'counter'; hist(o, 'dm', 'counter', price, note);
-      if (it) log(`${merchantOf(o.merchantId).name}: counter-offer ${gp(price)} for ${o.itemName}`, o.playerId);
+      log(`${merchantOf(o.merchantId).name}: counter-offer ${gp(price)} for ${o.itemName}`, o.playerId);
     } else if (b.action === 'reject') {
       o.status = 'rejected'; hist(o, 'dm', 'reject', o.price, note);
     } else fail('Unknown action');

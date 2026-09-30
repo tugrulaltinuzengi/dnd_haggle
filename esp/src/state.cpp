@@ -12,8 +12,6 @@ Lock::~Lock() { xSemaphoreGiveRecursive(mtx); }
 static volatile bool saveDue = false, bcastDue = false;
 static uint32_t saveAt = 0, lastBcast = 0;
 
-const char* const LEVEL_NAMES[5] = {"Stranger", "Acquaintance", "Customer", "Friend", "Confidant"};
-
 // ---------- persistence ----------
 static const char* DATA = "/data.json";
 static const char* TMP = "/data.tmp";
@@ -23,9 +21,9 @@ void seedWorld() {
   S["day"] = 1; S["week"] = 1;
   S["offers"].to<JsonArray>();
   JsonArray m = S["merchants"].to<JsonArray>();
-  struct { const char* id; const char* name; const char* emoji; const char* type; } ms[] = {
-    {"m1", "Bora", "🧓", "generous"}, {"m2", "Marla", "👩‍🔧", "neutral"}, {"m3", "Grom", "🐗", "greedy"}};
-  for (auto& x : ms) { JsonObject o = m.add<JsonObject>(); o["id"] = x.id; o["name"] = x.name; o["emoji"] = x.emoji; o["type"] = x.type; }
+  struct { const char* id; const char* name; const char* emoji; } ms[] = {
+    {"m1", "Bora", "🧓"}, {"m2", "Marla", "👩‍🔧"}, {"m3", "Grom", "🐗"}};
+  for (auto& x : ms) { JsonObject o = m.add<JsonObject>(); o["id"] = x.id; o["name"] = x.name; o["emoji"] = x.emoji; }
   JsonArray it = S["items"].to<JsonArray>();
   struct { const char* mid; const char* name; double price; bool magical; int stock; } is[] = {
     {"m1", "Potion of Healing", 50, false, -1}, {"m1", "Hempen Rope (50 ft)", 1, false, -1}, {"m1", "Tent", 2, false, -1},
@@ -35,20 +33,28 @@ void seedWorld() {
     JsonObject o = it.add<JsonObject>();
     o["id"] = newId(); o["merchantId"] = x.mid; o["name"] = x.name; o["price"] = x.price; o["magical"] = x.magical;
     if (x.stock < 0) o["stock"] = nullptr; else o["stock"] = x.stock;
+    o["hidden"] = false;
   }
   S["players"].to<JsonArray>();
-  S["negs"].to<JsonObject>(); S["bans"].to<JsonObject>(); S["revealed"].to<JsonObject>(); S["insightTries"].to<JsonObject>();
+  S["bans"].to<JsonObject>();
   S["dm"].to<JsonArray>(); S["log"].to<JsonArray>(); S["ledger"].to<JsonArray>();
-  S["affinity"].to<JsonObject>(); S["affinityWeek"].to<JsonObject>(); S["settings"].to<JsonObject>();
+  S["settings"].to<JsonObject>();
 }
 
 static void ensureShape() {
   auto arr = [](const char* k) { if (!S[k].is<JsonArray>()) S[k].to<JsonArray>(); };
   auto obj = [](const char* k) { if (!S[k].is<JsonObject>()) S[k].to<JsonObject>(); };
   arr("offers"); arr("merchants"); arr("items"); arr("players"); arr("dm"); arr("log"); arr("ledger");
-  obj("negs"); obj("bans"); obj("revealed"); obj("insightTries"); obj("affinity"); obj("affinityWeek"); obj("settings");
+  obj("bans"); obj("settings");
   if (!S["day"].is<int>()) S["day"] = 1;
   if (!S["week"].is<int>()) S["week"] = 1;
+  // Older saves carried the dice engine and affinity; drop what no longer exists. Accepted-but-undelivered offers become new again.
+  for (const char* k : {"negs", "revealed", "insightTries", "affinity", "affinityWeek"}) S.remove(k);
+  S["settings"].as<JsonObject>().remove("affinity");
+  for (JsonObject m : S["merchants"].as<JsonArray>()) m.remove("type");
+  for (JsonObject i : S["items"].as<JsonArray>()) { i.remove("minAffinity"); i["hidden"] = i["hidden"].as<bool>(); }
+  for (JsonObject p : S["players"].as<JsonArray>()) p.remove("advantage");
+  for (JsonObject o : S["offers"].as<JsonArray>()) if (!strcmp(o["status"] | "", "accepted")) o["status"] = "new";
 }
 
 static bool loadFile(const char* path) {
@@ -148,54 +154,6 @@ JsonObject merchantOf(const char* id) { JsonObject o = findBy(S["merchants"], "i
 JsonObject itemOf(const char* id) { JsonObject o = findBy(S["items"], "id", id); if (o.isNull()) fail("No such item", 404); return o; }
 JsonObject playerOf(const char* id) { JsonObject o = findBy(S["players"], "id", id); if (o.isNull()) fail("No such player", 404); return o; }
 JsonObject charOf(const char* id) { return findBy(CHARS.as<JsonArray>(), "id", id); }
-String nkey(const char* pid, const char* iid) { return String(pid) + ":" + iid; }
 String bkey(const char* pid, const char* mid) { return String(pid) + ":" + mid; }
-bool isBanned(const char* pid, const char* mid) { JsonVariant v = S["bans"][bkey(pid, mid)]; return v.is<int>() && v.as<int>() == S["day"].as<int>(); }
+bool isClosed(const char* pid, const char* mid) { JsonVariant v = S["bans"][bkey(pid, mid)]; return v.is<int>() && v.as<int>() == S["day"].as<int>(); }
 
-// ---------- affinity ----------
-AffCfg affCfg() {
-  AffCfg c = {true, 20, 10, {20, 40, 60, 80}, {0, 0, -1, -2, -3}, 3, 2, 5, 1, -1, -5};
-  JsonObjectConst o = S["settings"]["affinity"];
-  if (o.isNull()) return c;
-  if (o["enabled"].is<bool>()) c.enabled = o["enabled"];
-  if (o["start"].is<int>()) c.start = o["start"];
-  if (o["weeklyCap"].is<int>()) c.weeklyCap = o["weeklyCap"];
-  if (o["bonusRepFrom"].is<int>()) c.bonusRepFrom = o["bonusRepFrom"];
-  JsonArrayConst th = o["thresholds"]; if (th.size() == 4) for (int i = 0; i < 4; i++) c.thresholds[i] = th[i];
-  JsonArrayConst dm = o["dcMod"]; if (dm.size() == 5) for (int i = 0; i < 5; i++) c.dcMod[i] = dm[i];
-  JsonObjectConst g = o["gain"];
-  if (g["buy"].is<int>()) c.gainBuy = g["buy"];
-  if (g["offer"].is<int>()) c.gainOffer = g["offer"];
-  if (g["deal"].is<int>()) c.gainDeal = g["deal"];
-  if (g["ret"].is<int>()) c.gainRet = g["ret"];
-  if (g["angered"].is<int>()) c.gainAngered = g["angered"];
-  return c;
-}
-int affOf(const char* pid, const char* mid) {
-  JsonVariant v = S["affinity"][bkey(pid, mid)];
-  return v.is<int>() ? v.as<int>() : affCfg().start;
-}
-int affLevel(const AffCfg& c, int v) { int lv = 0; for (int i = 0; i < 4; i++) if (v >= c.thresholds[i]) lv = i + 1; return lv; }
-int levelFrom(const AffCfg& c, int level) { return level == 0 ? 0 : c.thresholds[level - 1]; }
-
-void affChange(JsonObject p, const char* mid, int delta, const char* why) {
-  AffCfg c = affCfg();
-  int d = delta;
-  if (!d || !c.enabled) return;
-  const char* pid = p["id"];
-  String k = bkey(pid, mid);
-  int cur = affOf(pid, mid);
-  if (d > 0) {
-    JsonObject w = S["affinityWeek"][k];
-    if (w.isNull() || w["week"].as<int>() != S["week"].as<int>()) { w = S["affinityWeek"][k].to<JsonObject>(); w["week"] = S["week"].as<int>(); w["gained"] = 0; }
-    int left = c.weeklyCap - w["gained"].as<int>();
-    d = min(d, max(0, left));
-    w["gained"] = w["gained"].as<int>() + d;
-  }
-  int next = max(0, min(100, cur + d));
-  if (next == cur) return;
-  S["affinity"][k] = next;
-  JsonObject m = findBy(S["merchants"], "id", mid);
-  String txt = String(p["name"].as<const char*>()) + " ↔ " + (m.isNull() ? "?" : m["name"].as<const char*>()) + ": affinity " + (next > cur ? "+" : "") + String(next - cur) + " (" + why + ")";
-  logLine(txt, pid);
-}

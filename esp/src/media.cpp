@@ -116,7 +116,7 @@ String mediaFinish(const MediaJob& j) {
   size_t replaced = 0;
   for (const char* e : {"png", "jpg"}) { String p = dir + "/" + base + "." + e; if (LittleFS.exists(p)) { File o = LittleFS.open(p, "r"); replaced += o.size(); o.close(); } }
   size_t used = dirBytes("/media/items") + dirBytes("/media/portraits");
-  if (used - replaced + size > MEDIA_QUOTA || LittleFS.totalBytes() - LittleFS.usedBytes() < size + 16384) fail("Medya deposu dolu", 413);
+  if (used - replaced + size > MEDIA_QUOTA || LittleFS.totalBytes() - LittleFS.usedBytes() < size + 16384) fail("Media storage is full", 413);
 
   for (const char* e : {"png", "jpg"}) LittleFS.remove(dir + "/" + base + "." + e);
   String fin = dir + "/" + base + "." + info.ext;
