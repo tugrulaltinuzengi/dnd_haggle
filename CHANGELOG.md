@@ -5,6 +5,9 @@ Cross-app status and compatibility: `docs/superpowers/plans/2026-09-29-table-syn
 History before 0.12.3: `PROJE.md` §12.
 
 ## [Unreleased]
+### Added
+- **Relay watchdog (ESP32):** a text ping every 20 s that the Worker answers; a link that stays silent or never stays up for 30 s is dialed again, and after 4 failed attempts the board reboots.
+- `esp/tools/sse-load.mjs`: 9 event streams with heap sampling, over the LAN or through the relay.
 
 ## [0.13.0] - 2026-09-30
 ### Added

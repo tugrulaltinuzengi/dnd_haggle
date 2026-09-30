@@ -44,6 +44,8 @@ Job jobs[MAX_JOBS];
 WebSocketsClient ws;
 String wsPath;
 bool started = false, connected = false;
+uint32_t connectedAt = 0, lastPong = 0, lastPing = 0, lastStable = 0;   // watchdog clocks
+int restarts = 0;
 
 String b64(const uint8_t* p, size_t n) {
   size_t cap = 4 * ((n + 2) / 3) + 4, olen = 0;
@@ -241,9 +243,10 @@ void pump() {
 
 void onWs(WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
-    case WStype_CONNECTED: connected = true; Serial.println("relay: connected"); break;
+    case WStype_CONNECTED: connected = true; connectedAt = lastPong = millis(); Serial.println("relay: connected"); break;
     case WStype_DISCONNECTED: if (connected) Serial.println("relay: disconnected"); connected = false; freeAll(); dropStreams(); break;
     case WStype_TEXT: {
+      if (length == 4 && !memcmp(payload, "pong", 4)) { lastPong = millis(); break; }
       JsonDocument d;
       if (deserializeJson(d, payload, length)) return;
       const char* t = d["t"] | "";
@@ -272,7 +275,30 @@ void startWs() {
   ws.setReconnectInterval(5000);
   ws.enableHeartbeat(15000, 4000, 2);
   started = true;
+  lastStable = millis();
   Serial.printf("relay: dialing %s:%d (%s)\n", RELAY_HOST, (int)RELAY_PORT, RELAY_TLS ? "tls" : "plain");
+}
+
+// Watchdog: the Worker and the board can disagree about whether the socket is alive (seen once: the board said connected while the Worker had no
+// socket). We send a text "ping" every 20 s and the Worker answers "pong" without waking; a link that stays silent, or that never stays up for
+// 30 s, is torn down and dialed again. If that keeps failing the board reboots (the state is saved a second after every change).
+void restartWs() {
+  restarts++;
+  Serial.printf("relay: watchdog restart #%d\n", restarts);
+  if (restarts >= 4) { Serial.println("relay: still failing, rebooting"); vTaskDelay(pdMS_TO_TICKS(2500)); ESP.restart(); }
+  ws.disconnect();
+  connected = false; freeAll(); dropStreams();
+  startWs();
+}
+
+void watchdog() {
+  uint32_t now = millis();
+  if (connected) {
+    if (now - lastPing > 20000) { lastPing = now; ws.sendTXT("ping"); }
+    if (now - connectedAt > 30000 && now - lastPong < 30000) { lastStable = now; restarts = 0; }   // up for 30 s and the Worker answers
+    if (now - lastPong > 55000) { Serial.println("relay: no pong from the Worker"); restartWs(); return; }
+  }
+  if (WiFi.status() == WL_CONNECTED && now - lastStable > 180000) restartWs();
 }
 
 void task(void*) {
@@ -289,6 +315,7 @@ void task(void*) {
     if (RELAY_TLS && !RELAY_CA_PEM[0]) { vTaskDelay(pdMS_TO_TICKS(1000)); continue; }
     ws.loop();
     pump();
+    watchdog();
     if (wantCloseDm) { wantCloseDm = false; for (auto& s : streams) if (s.used && s.who == "dm") closeStream(s); }
     if (wantBroadcast) { wantBroadcast = false; broadcastStreams(); }
     static uint32_t lastKa = 0;
