@@ -10,7 +10,6 @@ on:
         required: false
         default: ""
   push:
-    branches: [ccr-7ab72bbd-hctq3y]
     paths: ["android/**", ".github/workflows/apk.yml"]
 
 permissions:
@@ -31,10 +30,22 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
+      # Optional stable signing key: add repo secrets PAZAR_KEYSTORE_B64 and
+      # PAZAR_KEYSTORE_PASSWORD. Without them the default debug key is used.
+      - name: Restore signing key
+        env:
+          KS_B64: ${{ secrets.PAZAR_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/pazar.keystore"
+            echo "PAZAR_KEYSTORE_FILE=$RUNNER_TEMP/pazar.keystore" >> "$GITHUB_ENV"
+          fi
+
       - name: Build debug APK
         working-directory: android
         env:
           PAZAR_URL: ${{ inputs.url }}
+          PAZAR_KEYSTORE_PASSWORD: ${{ secrets.PAZAR_KEYSTORE_PASSWORD }}
         run: gradle --no-daemon assembleDebug
 
       - name: Rename
