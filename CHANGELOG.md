@@ -1,7 +1,6 @@
 # Changelog — pazar (dnd_haggle)
 
 All notable changes to this app. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [SemVer](https://semver.org/).
-Cross-app status and compatibility: `docs/superpowers/plans/2026-09-29-table-sync-master.md` (single source of truth).
 History before 0.12.3: `PROJE.md` §12.
 
 ## [Unreleased]

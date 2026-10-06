@@ -1,0 +1,13 @@
+# Signing keys never go in git
+*.keystore
+*.jks
+# Android build output
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+.idea/
+.DS_Store
+app/data/
+app/data.json
+app/backups/

@@ -10,18 +10,20 @@ android {
     namespace 'app.pazar'
     compileSdk 34
 
-    // Sabit imza: her derleme aynı anahtarla imzalanır, böylece yeni APK eskisinin üstüne kurulabilir.
-    // (Yalnızca kişisel/debug kullanım içindir, Play Store anahtarı değildir.)
-    signingConfigs {
-        debug {
-            storeFile file('pazar-debug.keystore')
-            storePassword 'pazar-debug'
-            keyAlias 'pazar-debug'
-            keyPassword 'pazar-debug'
-            // v1'den v3'e tüm imza şemaları: en katı kurucular (OEM, eski Android 7.x) için en uyumlu
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = true
+    // Sabit imza (isteğe bağlı): PAZAR_KEYSTORE_FILE / _PASSWORD / _ALIAS ortam değişkenleri verilirse
+    // her derleme aynı anahtarla imzalanır ve yeni APK eskisinin üstüne kurulur. Verilmezse Android'in
+    // varsayılan debug anahtarı kullanılır. Anahtar depoya GİRMEZ (bkz. .gitignore).
+    if (System.getenv('PAZAR_KEYSTORE_FILE')) {
+        signingConfigs {
+            debug {
+                storeFile file(System.getenv('PAZAR_KEYSTORE_FILE'))
+                storePassword System.getenv('PAZAR_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('PAZAR_KEYSTORE_ALIAS') ?: 'pazar-debug'
+                keyPassword System.getenv('PAZAR_KEYSTORE_PASSWORD')
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
         }
     }
 
