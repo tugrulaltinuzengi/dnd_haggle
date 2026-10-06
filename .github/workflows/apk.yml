@@ -10,7 +10,6 @@ on:
         required: false
         default: ""
   push:
-    branches: [main]
     paths: ["android/**", ".github/workflows/apk.yml"]
 
 permissions:
